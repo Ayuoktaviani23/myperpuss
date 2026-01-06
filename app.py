@@ -34,9 +34,11 @@ if 'memorized_parts' not in st.session_state:
     st.session_state.memorized_parts = {}
 if 'user_custom_codes' not in st.session_state:
     st.session_state.user_custom_codes = {}
+if 'hafalan_timer' not in st.session_state:
+    st.session_state.hafalan_timer = 0
 
 # =========================
-# DATASET MATERI LENGKAP (TETAP SAMA)
+# DATASET MATERI LENGKAP (DITAMBAHKAN)
 # =========================
 materi = {
     # ---------- SESSION ----------
@@ -137,6 +139,635 @@ input[type="submit"]:hover{
         ]
     },
 
+    "Index Page dengan Filter & Favorit (Session)": {
+        "deskripsi": "Halaman utama dengan filter kategori, status, favorit, dan print button",
+        "tipe": "php",
+        "kode": """<?php
+session_start();
+require "../koneksi.php";
+
+if (!isset($_SESSION['id_user'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$id_user = $_SESSION['id_user'];
+
+/* ===== FAVORIT (SESSION) ===== */
+if (isset($_GET['fav'])) {
+    $id = $_GET['fav'];
+    $_SESSION['favorite'][$id] = $_SESSION['favorite'][$id] ?? 0;
+    $_SESSION['favorite'][$id] = $_SESSION['favorite'][$id] ? 0 : 1;
+    header("Location: index.php");
+    exit;
+}
+
+/* ===== FILTER ===== */
+$where = "WHERE t.id_user = '$id_user'";
+
+if (!empty($_GET['category'])) {
+    $where .= " AND t.id_category = '{$_GET['category']}'";
+}
+
+if (!empty($_GET['status'])) {
+    $where .= " AND t.status = '{$_GET['status']}'";
+}
+
+$sql = "SELECT t.*, c.category 
+        FROM todo t 
+        LEFT JOIN category c ON t.id_category = c.id_category
+        $where
+        ORDER BY t.id_todo DESC";
+
+$query    = mysqli_query($koneksi, $sql);
+$kategori = mysqli_query($koneksi, "SELECT * FROM category");
+
+$favorit = $_GET['favorite'] ?? 0;
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>My TodoList</title>
+
+<style>
+/* CSS akan dipisah di file terpisah */
+</style>
+
+</head>
+<body>
+
+<?php include "navbar.php"; ?>
+
+<div class="content">
+    <form method="get">
+        <label>Filter Kategori</label>
+        <select name="category" onchange="this.form.submit()">
+            <option value="">Semua</option>
+            <?php while($k=mysqli_fetch_assoc($kategori)): ?>
+                <option value="<?= $k['id_category']; ?>"
+                    <?= (@$_GET['category']==$k['id_category'])?'selected':'' ?>>
+                    <?= $k['category']; ?>
+                </option>
+            <?php endwhile; ?>
+        </select>
+    </form>
+
+    <form method="get">
+        <label>Filter Status</label>
+        <select name="status" onchange="this.form.submit()">
+            <option value="">Semua</option>
+            <option value="Pending" <?= (@$_GET['status']=='Pending')?'selected':'' ?>>Pending</option>
+            <option value="Done" <?= (@$_GET['status']=='Done')?'selected':'' ?>>Done</option>
+        </select>
+    </form>
+
+    <form method="get">
+        <label>Filter Favorite</label>
+        <select name="favorite" onchange="this.form.submit()">
+            <option value="">Semua</option>
+            <option value="1" <?= (@$_GET['favorite']=='1')?'selected':'' ?>>Favorite</option>
+        </select>
+    </form>
+</div>
+
+<center>
+    <button onclick="window.print()" style="background:#5c5e5c;">Print</button>
+    <br>
+    <a href="tambah.php">
+        <button style="background:#0c8f3e;margin-top:6px;">+ Tambah</button>
+    </a>
+</center>
+<br>
+
+<div class="todo-wrapper">
+<?php while($todo=mysqli_fetch_assoc($query)): ?>
+<?php
+    $iniFavorit = $_SESSION['favorite'][$todo['id_todo']] ?? 0;
+    if ($favorit && $iniFavorit != 1) continue;
+?>
+<div class="todo-card <?= $todo['status']=='Done'?'done':'' ?>">
+    <h4><?= $todo['title']; ?></h4>
+    <small><?= $todo['description']; ?></small>
+    <p><b>Kategori:</b> <?= $todo['category']; ?></p>
+    <p><b>Status:</b> <?= $todo['status']; ?></p>
+
+    <div class="todo-action">
+        <a href="edit.php?id_todo=<?= $todo['id_todo']; ?>" class="edit">Edit</a>
+        <a href="hapus.php?id_todo=<?= $todo['id_todo']; ?>" class="hapus">Hapus</a>
+        <a href="?fav=<?= $todo['id_todo']; ?>" style="background:#e91e63;">
+            <?= $iniFavorit ? '❤️' : 'Favorit' ?>
+        </a>
+    </div>
+</div>
+<?php endwhile; ?>
+</div>
+
+</body>
+</html>""",
+        "penjelasan": {
+            "title": "Index Page dengan Filter Multiple",
+            "points": [
+                "**session_start()** → Wajib untuk akses session",
+                "**require** → Include koneksi database",
+                "**Session Protection** → Cek apakah user sudah login",
+                "**Favorit System** → Menggunakan session untuk simpan favorit",
+                "**Dynamic WHERE Clause** → Filter berdasarkan kategori, status, favorit",
+                "**LEFT JOIN** → Gabungkan tabel todo dan category",
+                "**Auto Submit Filter** → onchange='this.form.submit()'",
+                "**Print Function** → window.print() untuk cetak halaman",
+                "**Ternary Operator** → <?= kondisi?value1:value2 ?>"
+            ]
+        },
+        "critical_parts": [
+            "session_start()",
+            "require \"../koneksi.php\"",
+            "if (!isset($_SESSION['id_user']))",
+            "header(\"Location: login.php\")",
+            "exit",
+            "$_SESSION['favorite'][$id] = $_SESSION['favorite'][$id] ?? 0",
+            "WHERE t.id_user = '$id_user'",
+            "LEFT JOIN category c ON t.id_category = c.id_category",
+            "onchange=\"this.form.submit()\"",
+            "<?= (@$_GET['category']==$k['id_category'])?'selected':'' ?>",
+            "<?php while($todo=mysqli_fetch_assoc($query)): ?>",
+            "<?php endwhile; ?>"
+        ]
+    },
+
+    "Form Daftar Pengguna Baru (HTML)": {
+        "deskripsi": "Halaman pendaftaran user dengan validasi HTML5",
+        "tipe": "html",
+        "kode": """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar Pengguna Baru</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <?php include "navbar2.php"; ?>
+    <div class="form-box">
+        <h3>Daftar Pengguna Baru</h3>
+        <form action="proses_daftar.php" method="post">
+            <p style="padding-right: 197px; font-size: 15px;">Nama Lengkap</p>
+            <input type="text" name="name" id="" required>
+
+            <p style="padding-right: 260px; font-size: 15px;">Email</p>
+            <input type="email" name="email" id="" required>
+            
+            <p style="padding-right: 230px; font-size: 15px;">Username</p>
+            <input type="text" name="username" id="" required>
+            
+            <p style="padding-right: 230px; font-size: 15px;">Password</p>
+            <input type="password" name="password" id="" required>
+            
+            <p style="padding-right: 208px; font-size: 15px;">Tanggal Lahir</p>
+            <input type="date" name="birth_date" id="" required>
+
+            <input type="submit" value="Daftar" style="background: #3b82f6; color: #fff;">
+
+            <p>Sudah punya akun? <a href="login.php" style="text-decoration: none;">Login Disini</a></p>
+        </form>
+    </div>
+</body>
+</html>""",
+        "penjelasan": {
+            "title": "Form Registration HTML5",
+            "points": [
+                "**HTML5 Input Types** → type='email', type='date' untuk validasi otomatis",
+                "**Required Attribute** → Validasi client-side wajib diisi",
+                "**Method POST** → Data dikirim via POST (lebih aman)",
+                "**Inline CSS** → Styling langsung di elemen",
+                "**Link to Login** → Navigasi ke halaman login",
+                "**Include Navbar** → <?php include 'navbar2.php'; ?>",
+                "**Semantic HTML** → Penggunaan tag yang sesuai"
+            ]
+        },
+        "critical_parts": [
+            "<!DOCTYPE html>",
+            "method=\"post\"",
+            "action=\"proses_daftar.php\"",
+            "type=\"text\" name=\"name\" required",
+            "type=\"email\" name=\"email\" required",
+            "type=\"text\" name=\"username\" required",
+            "type=\"password\" name=\"password\" required",
+            "type=\"date\" name=\"birth_date\" required",
+            "type=\"submit\" value=\"Daftar\"",
+            "<?php include \"navbar2.php\"; ?>"
+        ]
+    },
+
+    "Proses Pendaftaran (INSERT)": {
+        "deskripsi": "Proses menyimpan data pendaftaran ke database",
+        "tipe": "php",
+        "kode": """<?php
+require "koneksi.php";
+
+$nama = $_POST['name'];
+$date = $_POST['birth_date'];
+$email = $_POST['email'];
+$username = $_POST['username'];
+$password = $_POST['password'];
+
+$sql = "INSERT INTO user (name, birth_date, email, username, password)
+        VALUES
+        ('$nama','$date','$email','$username',md5('$password'))";
+$query = mysqli_query($koneksi, $sql);
+
+if($query){
+    header("location:login.php?daftar=sukses");
+    exit;
+} else {
+    header("location:daftar.php?daftar=gagal");
+    exit;
+}
+?>""",
+        "penjelasan": {
+            "title": "INSERT Data User Baru",
+            "points": [
+                "**$_POST** → Mengambil data dari form pendaftaran",
+                "**md5()** → Enkripsi password sebelum disimpan",
+                "**INSERT INTO** → Syntax untuk tambah data ke tabel user",
+                "**Multiple Columns** → Menyimpan banyak field sekaligus",
+                "**Conditional Redirect** → Redirect berdasarkan hasil query",
+                "**Success/Failure** → Parameter URL untuk feedback (daftar=sukses/gagal)",
+                "**exit** → Hentikan eksekusi setelah redirect"
+            ]
+        },
+        "critical_parts": [
+            "require \"koneksi.php\"",
+            "$_POST['name']",
+            "$_POST['birth_date']",
+            "$_POST['email']",
+            "$_POST['username']",
+            "$_POST['password']",
+            "INSERT INTO user (name, birth_date, email, username, password)",
+            "VALUES ('$nama','$date','$email','$username',md5('$password'))",
+            "mysqli_query($koneksi, $sql)",
+            "if($query){",
+            "header(\"location:login.php?daftar=sukses\")",
+            "header(\"location:daftar.php?daftar=gagal\")",
+            "exit"
+        ]
+    },
+
+    "Halaman Profil User": {
+        "deskripsi": "Menampilkan data profil user yang sedang login",
+        "tipe": "php",
+        "kode": """<?php
+session_start();
+require "koneksi.php";
+
+$id_user = $_SESSION['id_user'];
+$user = mysqli_query($koneksi, "SELECT * FROM user WHERE id_user = '$id_user'");
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil Saya</title>
+    <style>
+        .profil{
+            width: 320px; 
+            margin: 40px auto; 
+            background: #fff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+        .profil h3{
+            margin-bottom: 12px;
+            margin-top: 7px;
+        }
+        .profil p {
+            margin-bottom: 4px;
+        }
+        .profil button{
+            margin-bottom: 8px;
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <?php include "navbar.php"; ?>
+    <div class="profil">
+        <h3>Profil Saya</h3>
+        <?php while($u = mysqli_fetch_assoc($user)) { ?>
+            <p><strong>Nama :</strong> <?= $u['name'] ?></p>
+            <p><strong>Tanggal Lahir :</strong> <?= $u['birth_date'] ?></p>
+            <p><strong>Email :</strong> <?= $u['email'] ?></p>
+            <p><strong>Username :</strong> <?= $u['username'] ?></p>
+            <p><strong>Password :</strong> ****</p>
+            <center><button><a href="index.php" style="text-decoration: none; color: #fff;">Kembali</a></button></center>
+        <?php } ?>
+    </div>
+</body>
+</html>""",
+        "penjelasan": {
+            "title": "Menampilkan Data Profil",
+            "points": [
+                "**Session Protection** → Hanya user yang login bisa akses profil",
+                "**SELECT WHERE** → Ambil data spesifik berdasarkan id_user",
+                "**Inline Styling** → CSS langsung dalam style tag",
+                "**Box Shadow** → Efek bayangan untuk card profil",
+                "**Secure Display** → Password ditampilkan sebagai '****'",
+                "**Loop while** → Menampilkan data user (meski hanya 1)",
+                "**Back Button** → Navigasi kembali ke index"
+            ]
+        },
+        "critical_parts": [
+            "session_start()",
+            "require \"koneksi.php\"",
+            "$_SESSION['id_user']",
+            "SELECT * FROM user WHERE id_user = '$id_user'",
+            "mysqli_query($koneksi, $query)",
+            "<?php include \"navbar.php\"; ?>",
+            "<?php while($u = mysqli_fetch_assoc($user)) { ?>",
+            "<?= $u['name'] ?>",
+            "<?php } ?>"
+        ]
+    },
+
+    "CSS Full Project (style.css)": {
+        "deskripsi": "File CSS lengkap untuk project Todo List",
+        "tipe": "css",
+        "kode": """/* =========================
+   RESET & GLOBAL
+========================= */
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body{
+    background:#f4f6f8;
+}
+
+/* =========================
+   NAVBAR
+========================= */
+.navbar{
+    background: linear-gradient(90deg, #111 0%, #333 100%);
+    color: white;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.navbar a{
+    color: white;
+    text-decoration: none;
+    margin-left: 20px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+
+.navbar a:hover{
+    background: rgba(255,255,255,0.1);
+}
+
+.navbar a[href*="logout"]{
+    background: #dc2626;
+}
+
+.navbar a[href*="logout"]:hover{
+    background: #b91c1c;
+}
+
+/* =========================
+   FILTER & BUTTON
+========================= */
+.content{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:15px;
+    margin:20px 0;
+}
+
+label{
+    display:block;
+    font-weight:bold;
+    margin-bottom:5px;
+    text-align:center;
+}
+
+select{
+    padding:6px 10px;
+    border-radius:5px;
+}
+
+button{
+    padding:7px 12px;
+    border:none;
+    border-radius:5px;
+    color:#fff;
+    cursor:pointer;
+}
+
+/* =========================
+   TODO LIST GRID
+========================= */
+.todo-wrapper{
+    width:90%;
+    margin:auto;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+    gap:15px;
+}
+
+.todo-card{
+    background:#fff;
+    padding:15px;
+    border-radius:8px;
+    box-shadow:0 2px 6px rgba(0,0,0,.1);
+}
+
+.todo-card.done{
+    background:#333;
+    color:#fff;
+    text-decoration:line-through;
+}
+
+.todo-card h4{
+    margin-bottom:5px;
+}
+
+.todo-action{
+    margin-top:10px;
+}
+
+.todo-action a{
+    display:inline-block;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    color:#fff;
+    font-size:13px;
+    margin-right:5px;
+}
+
+.edit{background:#007bff;}
+.hapus{background:#dc3545;}
+
+/* =========================
+   FORM LOGIN / REGISTER
+========================= */
+.form-wrapper{
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.form{
+    background:#fff;
+    width:300px;
+    padding:20px;
+    border:1px solid #ccc;
+    border-radius:6px;
+}
+
+.form h2{
+    text-align:center;
+    margin-bottom:15px;
+}
+
+.form label{
+    font-size:14px;
+    text-align:left;
+}
+
+.form input[type="text"],
+.form input[type="password"]{
+    width:100%;
+    padding:7px;
+    margin:5px 0 12px;
+    border:1px solid #999;
+    border-radius:4px;
+}
+
+.login-submit input[type="submit"]{
+    width:100%;
+    padding:8px;
+    background:#63d4f4;
+    color:#fff;
+    border:none;
+    border-radius:4px;
+    cursor:pointer;
+}
+
+.submit-regis input[type="submit"]{
+    width:100%;
+    padding:8px;
+    background:#138d07;
+    color:#fff;
+    border:none;
+    border-radius:4px;
+    cursor:pointer;
+}
+
+.form p{
+    font-size:13px;
+    text-align:center;
+    margin-top:10px;
+}
+
+/* =========================
+   PROFILE PAGE
+========================= */
+.profil{
+    width: 320px; 
+    margin: 40px auto; 
+    background: #fff; 
+    padding: 20px; 
+    border-radius: 8px; 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+
+.profil h3{
+    margin-bottom: 12px;
+    margin-top: 7px;
+}
+
+.profil p {
+    margin-bottom: 4px;
+}
+
+.profil button{
+    margin-bottom: 8px;
+    background: #555;
+}
+
+/* =========================
+   RESPONSIVE DESIGN
+========================= */
+@media (max-width: 768px) {
+    .navbar{
+        padding: 10px 15px;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .todo-wrapper{
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+    
+    .content{
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .form{
+        width: 90%;
+        margin: 20px auto;
+    }
+}""",
+        "penjelasan": {
+            "title": "CSS Best Practices Full Project",
+            "points": [
+                "**CSS Reset** → *{margin:0; padding:0; box-sizing:border-box}",
+                "**Flexbox & Grid** → Layout modern untuk navbar dan todo cards",
+                "**Sticky Navbar** → position:sticky untuk navbar tetap saat scroll",
+                "**CSS Grid** → grid-template-columns untuk responsive layout",
+                "**Media Queries** → Responsive design untuk mobile",
+                "**Pseudo-classes** → :hover untuk efek interaktif",
+                "**Attribute Selectors** → a[href*='logout'] untuk styling spesifik",
+                "**Box Shadow** → Efek kedalaman untuk cards",
+                "**CSS Variables** → Bisa ditambahkan untuk theming"
+            ]
+        },
+        "critical_parts": [
+            "*{margin:0; padding:0; box-sizing:border-box}",
+            "display: flex",
+            "justify-content: space-between",
+            "position: sticky",
+            "top: 0",
+            "display:grid",
+            "grid-template-columns:repeat(auto-fill,minmax(280px,1fr))",
+            "gap:15px",
+            "box-shadow:0 2px 6px rgba(0,0,0,.1)",
+            "transition: background 0.3s",
+            "@media (max-width: 768px)"
+        ]
+    },
+
+    # ---------- CRUD OPS LAINNYA (dari versi sebelumnya) ----------
     "Proses Login (Session)": {
         "deskripsi": "Proses validasi login dan membuat session",
         "tipe": "php",
@@ -216,138 +847,6 @@ header("location:login.php");
         ]
     },
 
-    # ---------- CRUD (READ) ----------
-    "Index Page (Read + Filter)": {
-        "deskripsi": "Halaman utama menampilkan data dengan filter dan proteksi session",
-        "tipe": "php",
-        "kode": """<?php
-session_start();
-include '../koneksi.php';
-
-// PROTEKSI SESSION
-if(!isset($_SESSION['id_user'])){
-    header("location:login.php?logindulu");
-    exit;
-}
-
-$id_user=$_SESSION['id_user'];
-
-/* FILTER CATEGORY */
-$filter_category = $_GET['category'] ?? '';
-
-// Ambil data kategori untuk dropdown
-$sql_category = "SELECT * FROM category";
-$query_category = mysqli_query($koneksi, $sql_category);
-
-// Query utama dengan JOIN dan optional filter
-$sql = "SELECT todo.*, category.category 
-        FROM todo 
-        JOIN category ON todo.id_category = category.id_category";
-
-if($filter_category != ''){
-    $sql .= " WHERE todo.id_category = '$filter_category'";
-}
-
-$query = mysqli_query($koneksi, $sql);
-?>""",
-        "penjelasan": {
-            "title": "Konsep Read dengan Filter",
-            "points": [
-                "**isset($_SESSION)** → Mengecek apakah user sudah login",
-                "**$_GET['category']** → Mengambil parameter filter dari URL",
-                "**?? ''** → Null coalescing operator (PHP 7+)",
-                "**JOIN** → Menggabungkan tabel todo dan category",
-                "**WHERE** → Filter data berdasarkan kategori",
-                "**OPTIONAL FILTER** → Jika tidak kosong, tambahkan WHERE clause"
-            ]
-        },
-        "critical_parts": [
-            "session_start()",
-            "include '../koneksi.php'",
-            "if(!isset($_SESSION['id_user']))",
-            "header(\"location:login.php\")",
-            "exit",
-            "$_SESSION['id_user']",
-            "$_GET['category'] ?? ''",
-            "SELECT * FROM category",
-            "mysqli_query($koneksi, $sql_category)",
-            "SELECT todo.*, category.category",
-            "JOIN category ON todo.id_category = category.id_category",
-            "WHERE todo.id_category = '$filter_category'",
-            "mysqli_query($koneksi, $sql)"
-        ]
-    },
-
-    "CSS Grid Layout": {
-        "deskripsi": "Styling card dengan CSS Grid untuk layout responsive",
-        "tipe": "css",
-        "kode": """<style>
-/* GRID LAYOUT */
-.todo-grid{
-    display: grid;
-    grid-template-columns: repeat(auto-fill, 240px);
-    justify-content: center;
-    gap: 20px;
-    padding-bottom: 40px;
-}
-
-/* CARD STYLING */
-.card{
-    padding: 15px;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-.card-light{
-    background: white;
-    color: black;
-    border: 1px solid #ddd;
-}
-.card-dark{
-    background: #111;
-    color: white;
-}
-
-/* CARD CONTENT */
-.card h4{
-    margin-bottom: 6px;
-    font-size: 18px;
-}
-.card p{
-    font-size: 14px;
-    margin: 4px 0;
-    line-height: 1.4;
-}
-
-/* STATUS INDICATOR */
-.status-pending {
-    color: #f59e0b;
-}
-.status-done {
-    color: #10b981;
-}
-</style>""",
-        "penjelasan": {
-            "title": "CSS Modern Layout",
-            "points": [
-                "**display: grid** → Menggunakan CSS Grid untuk layout",
-                "**repeat(auto-fill, 240px)** → Membuat kolom otomatis dengan lebar 240px",
-                "**justify-content: center** → Pusatkan grid items",
-                "**gap: 20px** → Jarak antar item (ganti margin)",
-                "**.card-light / .card-dark** → Conditional styling berdasarkan status",
-                "**box-shadow** → Efek bayangan untuk depth",
-                "**rgba()** → Warna dengan transparansi"
-            ]
-        },
-        "critical_parts": [
-            "display: grid",
-            "grid-template-columns: repeat(auto-fill, 240px)",
-            "justify-content: center",
-            "gap: 20px",
-            "box-shadow: 0 2px 8px rgba(0,0,0,0.1)"
-        ]
-    },
-
-    # ---------- CRUD (CREATE) ----------
     "Form Tambah Data (Create)": {
         "deskripsi": "Form HTML untuk menambah data baru dengan validasi session",
         "tipe": "php",
@@ -512,7 +1011,6 @@ header("location:index.php");
         ]
     },
 
-    # ---------- CRUD (UPDATE) ----------
     "Form Edit Data": {
         "deskripsi": "Form untuk mengedit data yang sudah ada",
         "tipe": "php",
@@ -608,7 +1106,6 @@ header("location:index.php");
         ]
     },
 
-    # ---------- CRUD (DELETE) ----------
     "Proses Hapus (DELETE)": {
         "deskripsi": "Menghapus data dengan konfirmasi JavaScript",
         "tipe": "php",
@@ -652,7 +1149,6 @@ header("location:index.php");
         ]
     },
 
-    # ---------- NAVBAR & CSS ----------
     "Navbar CSS": {
         "deskripsi": "Navigation bar dengan styling modern",
         "tipe": "css",
@@ -699,6 +1195,7 @@ header("location:index.php");
     <div>
         <a href="index.php">🏠 Home</a>
         <a href="tambah.php">➕ Tambah</a>
+        <a href="profil.php">👤 Profil</a>
         <a href="logout.php">🚪 Logout</a>
     </div>
 </div>""",
@@ -871,6 +1368,12 @@ def analyze_code_errors(user_code, correct_code, code_type):
         
         if "delete" in user_code_lower and "where" not in user_code_lower:
             errors.append("❌ **DELETE** query tanpa **WHERE** clause! (SANGAT BERBAHAYA)")
+        
+        if "insert" in user_code_lower and "values" not in user_code_lower:
+            warnings.append("⚠️ **INSERT** query tanpa **VALUES()**")
+        
+        if "select" in user_code_lower and "from" not in user_code_lower:
+            errors.append("❌ **SELECT** query tanpa **FROM** clause")
     
     elif "html" in code_type:
         if "<!doctype" not in user_code_lower:
@@ -878,6 +1381,9 @@ def analyze_code_errors(user_code, correct_code, code_type):
         
         if "<form" in user_code_lower and ("method=" not in user_code_lower or "action=" not in user_code_lower):
             warnings.append("⚠️ Form tanpa **method** atau **action** attribute")
+        
+        if "required" not in user_code_lower and "name=" in user_code_lower:
+            warnings.append("⚠️ Input field tanpa **required** attribute")
     
     elif "css" in code_type:
         if "{" in user_code and "}" not in user_code:
@@ -885,6 +1391,9 @@ def analyze_code_errors(user_code, correct_code, code_type):
         
         if ":" in user_code and ";" not in user_code:
             warnings.append("⚠️ Property CSS tanpa titik koma **;**")
+        
+        if "display:" in user_code and ("flex" not in user_code_lower and "grid" not in user_code_lower):
+            warnings.append("⚠️ **display** property tanpa value yang jelas")
     
     # Suggestions berdasarkan similarity
     similarity = calculate_similarity(user_code, correct_code)
@@ -905,9 +1414,10 @@ def extract_code_segments(full_code, num_segments=3):
     segments = []
     
     # Cari bagian-bagian kritis
-    keywords = ["session_start", "include", "SELECT", "INSERT", "UPDATE", "DELETE", 
+    keywords = ["session_start", "include", "require", "SELECT", "INSERT", "UPDATE", "DELETE", 
                 "WHERE", "header(", "exit", "mysqli_query", "DOCTYPE", "<form", 
-                "display:", "grid-template", "function", "if(", "while(", "foreach"]
+                "display:", "grid-template", "function", "if(", "while(", "foreach",
+                "<?php", "?>", "VALUES", "JOIN", "LEFT JOIN", "method=", "action="]
     
     current_segment = []
     for line in lines:
@@ -934,6 +1444,22 @@ def extract_code_segments(full_code, num_segments=3):
     
     # Pilih 3 segment terbaik
     return segments[:min(num_segments, len(segments))]
+
+# =========================
+# TIMER FUNGSI UTILITY
+# =========================
+def format_time(seconds):
+    """Format waktu dalam MM:SS"""
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    return f"{minutes:02d}:{secs:02d}"
+
+def update_timer():
+    """Update timer setiap detik"""
+    if 'hafalan_timer_start' in st.session_state:
+        elapsed = time.time() - st.session_state.hafalan_timer_start
+        return max(0, st.session_state.hafalan_timer_duration - elapsed)
+    return 0
 
 # =========================
 # SIDEBAR NAVIGATION
@@ -985,6 +1511,17 @@ with st.sidebar:
     else:
         st.metric("Skor Terakhir", "Belum ada")
     
+    # Timer setting untuk hafalan
+    if st.session_state.hafalan_mode:
+        st.markdown("---")
+        st.markdown("### ⏱️ Timer Hafalan")
+        timer_setting = st.slider(
+            "Waktu (detik):",
+            30, 300, 120,
+            key="sidebar_timer"
+        )
+        st.session_state.hafalan_timer = timer_setting
+    
     # Last viewed
     with st.expander("📖 Riwayat Materi"):
         for item in reversed(st.session_state.last_viewed):
@@ -1025,6 +1562,21 @@ if selected_mode == "🏠 Dashboard":
         # Hitung total kode custom yang dibuat
         total_custom = sum(len(codes) for codes in st.session_state.user_custom_codes.values())
         st.metric("Kode Custom", total_custom)
+    
+    # Materi baru yang ditambahkan
+    st.markdown("---")
+    st.subheader("🆕 Materi Baru yang Ditambahkan:")
+    
+    new_materials = [
+        "Index Page dengan Filter & Favorit (Session)",
+        "Form Daftar Pengguna Baru (HTML)",
+        "Proses Pendaftaran (INSERT)",
+        "Halaman Profil User",
+        "CSS Full Project (style.css)"
+    ]
+    
+    for mat in new_materials:
+        st.markdown(f"✅ **{mat}**")
     
     # Fitur baru: Hafalan Kode Custom
     st.markdown("---")
@@ -1099,8 +1651,14 @@ elif selected_mode == "📖 Belajar":
         
         # Critical parts
         st.markdown("### ⚠️ Bagian Kritis (WAJIB DIINGAT):")
-        for i, part in enumerate(topic_data["critical_parts"][:8]):  # Tampilkan 8 pertama
+        for i, part in enumerate(topic_data["critical_parts"][:10]):  # Tampilkan 10 pertama
             st.markdown(f"{i+1}. `{part}`")
+        
+        # Jika masih ada bagian kritis lainnya
+        if len(topic_data["critical_parts"]) > 10:
+            with st.expander("Lihat semua bagian kritis"):
+                for i, part in enumerate(topic_data["critical_parts"][10:]):
+                    st.markdown(f"{i+11}. `{part}`")
     
     with tab2:
         penjelasan = topic_data["penjelasan"]
@@ -1109,8 +1667,40 @@ elif selected_mode == "📖 Belajar":
         for point in penjelasan["points"]:
             st.markdown(f"• {point}")
         
-        # Additional notes
-        if "Session" in selected_topic:
+        # Additional notes berdasarkan jenis materi
+        if "Index Page" in selected_topic:
+            st.info("""
+            **Catatan Penting Filter & Favorit:**
+            1. **$_SESSION['favorite']** digunakan untuk menyimpan status favorit tanpa database
+            2. **Dynamic WHERE** memungkinkan filter bertumpuk (kategori + status + favorit)
+            3. **LEFT JOIN** memastikan semua todo ditampilkan meski tanpa kategori
+            4. **Auto Submit** dengan onchange memberikan UX yang lebih baik
+            """)
+        elif "Daftar" in selected_topic or "Pendaftaran" in selected_topic:
+            st.info("""
+            **Catatan Penting Pendaftaran:**
+            1. **HTML5 Input Types** memberikan validasi otomatis (email, date)
+            2. **md5()** digunakan untuk hashing password (lebih baik gunakan password_hash())
+            3. **Feedback via URL Parameter** (?daftar=sukses/gagal) untuk user experience
+            4. **Include Navbar** memastikan konsistensi UI
+            """)
+        elif "Profil" in selected_topic:
+            st.info("""
+            **Catatan Penting Profil:**
+            1. **Session Protection** hanya user yang login bisa akses profil sendiri
+            2. **Password Security** password tidak ditampilkan langsung (****)
+            3. **Inline CSS** untuk halaman sederhana yang tidak memerlukan file CSS terpisah
+            4. **Back Navigation** selalu sediakan tombol kembali ke halaman utama
+            """)
+        elif "CSS Full" in selected_topic:
+            st.info("""
+            **Best Practice CSS Project:**
+            1. **Organized Structure** kelompokkan CSS berdasarkan komponen
+            2. **Mobile First** design dengan media queries di akhir
+            3. **Consistent Naming** gunakan naming convention yang konsisten
+            4. **Reusable Classes** buat class yang bisa dipakai ulang
+            """)
+        elif "Session" in selected_topic:
             st.info("""
             **Catatan Penting Session:**
             1. `session_start()` harus dipanggil SEBELUM output apapun ke browser
@@ -1127,7 +1717,39 @@ elif selected_mode == "📖 Belajar":
     
     with tab3:
         # Tips berdasarkan jenis materi
-        if "Login" in selected_topic:
+        if "Index Page" in selected_topic:
+            st.success("""
+            **Tips Filter & Pagination:**
+            1. **SQL Injection Prevention** gunakan prepared statements untuk filter
+            2. **Session Storage** untuk data kecil seperti favorit (tidak perlu database)
+            3. **URL Parameters** gunakan untuk state management filter
+            4. **Print Function** window.print() untuk fitur cetak tanpa library
+            """)
+        elif "Daftar" in selected_topic:
+            st.warning("""
+            **Tips Form Registration:**
+            1. **Validation** validasi email format dan password strength
+            2. **Duplicate Check** cek apakah username/email sudah terdaftar
+            3. **Password Hashing** gunakan password_hash() bukan md5()
+            4. **Email Verification** kirim email verifikasi sebelum aktivasi
+            """)
+        elif "Profil" in selected_topic:
+            st.info("""
+            **Tips Profile Page:**
+            1. **Edit Function** tambahkan form edit profil
+            2. **Password Change** sediakan form ubah password terpisah
+            3. **Avatar Upload** tambahkan fitur upload foto profil
+            4. **Activity Log** tampilkan riwayat aktivitas user
+            """)
+        elif "CSS Full" in selected_topic:
+            st.info("""
+            **Tips CSS Optimization:**
+            1. **CSS Variables** gunakan :root untuk theme colors
+            2. **BEM Methodology** untuk scalable CSS architecture
+            3. **Minification** minify CSS untuk production
+            4. **Critical CSS** inline critical CSS untuk faster loading
+            """)
+        elif "Login" in selected_topic:
             st.success("""
             **Tips Login System:**
             1. Selalu gunakan password hashing (md5, password_hash)
@@ -1208,7 +1830,7 @@ elif selected_mode == "📖 Belajar":
             custom_code = st.text_area(
                 "Tempel/salin kode yang ingin dihafal:",
                 height=200,
-                placeholder="Salin bagian kode dari atas yang ingin kamu hafal...\nContoh:\nsession_start();\ninclude '../koneksi.php';\n// ... dst",
+                placeholder="Salin bagian kode dari atas yang ingin kamu hafal...\nContoh:\nsession_start();\nrequire '../koneksi.php';\n// ... dst",
                 key="manual_select_code"
             )
             
@@ -1248,7 +1870,7 @@ elif selected_mode == "📖 Belajar":
                             st.rerun()
 
 # =========================
-# PRAKTEK MODE (DENGAN FITUR HAFALAN CUSTOM)
+# PRAKTEK MODE (DENGAN FITUR HAFALAN CUSTOM & TIMER IMPROVED)
 # =========================
 elif selected_mode == "✏️ Praktek":
     st.title("✏️ Mode Praktek Menulis Kode")
@@ -1380,7 +2002,7 @@ elif selected_mode == "✏️ Praktek":
                 custom_code = st.text_area(
                     "Masukkan kode yang ingin dihafal:",
                     height=300,
-                    placeholder="Contoh:\n<?php\nsession_start();\ninclude 'koneksi.php';\n\n$username = $_POST['username'];\n// ... tambahkan kode lainnya",
+                    placeholder="Contoh:\n<?php\nsession_start();\nrequire 'koneksi.php';\n\n$username = $_POST['username'];\n// ... tambahkan kode lainnya",
                     key="custom_code_input"
                 )
                 
@@ -1455,13 +2077,15 @@ elif selected_mode == "✏️ Praktek":
                 # Hitung waktu sudah menghafal
                 elapsed = time.time() - st.session_state.hafalan_start_time
                 minutes = int(elapsed // 60)
-                st.metric("Waktu", f"{minutes:02d}:{int(elapsed % 60):02d}")
+                seconds = int(elapsed % 60)
+                st.metric("Waktu Total", f"{minutes:02d}:{seconds:02d}")
             with col3:
                 # Tombol reset/ulang
                 if st.button("🔄 Ulang Bagian", use_container_width=True):
                     st.session_state.hafalan_start_time = time.time()
                     st.session_state.show_hafalan_editor = False
                     st.session_state.show_hafalan_results = False
+                    st.session_state.hafalan_timer_start = None
                     st.rerun()
             
             # Tampilkan segment untuk dihafal
@@ -1475,10 +2099,15 @@ elif selected_mode == "✏️ Praktek":
             col1, col2 = st.columns([2, 1])
             
             with col1:
+                # Timer setting
+                if 'hafalan_timer_duration' not in st.session_state:
+                    st.session_state.hafalan_timer_duration = st.session_state.hafalan_timer
+                
                 hafalan_waktu = st.slider(
                     "⏱️ Set waktu menghafal (detik):",
-                    30, 600, 120,
-                    key="hafalan_timer_setting"
+                    30, 300, st.session_state.hafalan_timer_duration,
+                    key="hafalan_timer_setting",
+                    on_change=lambda: setattr(st.session_state, 'hafalan_timer_duration', st.session_state.hafalan_timer_setting)
                 )
             
             with col2:
@@ -1486,21 +2115,32 @@ elif selected_mode == "✏️ Praktek":
                     st.session_state.hafalan_timer_start = time.time()
                     st.session_state.show_hafalan_editor = True
                     st.session_state.show_hafalan_results = False
+                    st.session_state.auto_editor_shown = False
                     st.rerun()
             
             # Proses menghafal dengan timer
-            if 'hafalan_timer_start' in st.session_state:
+            if 'hafalan_timer_start' in st.session_state and st.session_state.hafalan_timer_start:
                 elapsed = time.time() - st.session_state.hafalan_timer_start
                 remaining = max(0, hafalan_waktu - elapsed)
                 
                 # Progress bar timer
                 progress = min(1.0, elapsed / hafalan_waktu)
-                st.progress(progress)
+                
+                # Create a custom progress bar with time display
+                col_prog1, col_prog2 = st.columns([3, 1])
+                with col_prog1:
+                    st.progress(progress)
+                with col_prog2:
+                    st.markdown(f"**{format_time(remaining)}**")
                 
                 if remaining > 0:
-                    st.info(f"⏱️ Waktu menghafal tersisa: {int(remaining)} detik")
+                    st.info(f"⏱️ **Waktu menghafal tersisa:** {format_time(remaining)}")
+                    
+                    # Auto refresh timer
+                    time.sleep(0.1)
+                    st.rerun()
                 else:
-                    st.error("⏰ WAKTU HABIS! Tutup kode dan tulis dari ingatan.")
+                    st.error("⏰ **WAKTU HABIS!** Tutup kode dan tulis dari ingatan.")
                     
                     # Auto tampilkan editor setelah waktu habis
                     if not st.session_state.get('auto_editor_shown', False):
@@ -1549,13 +2189,14 @@ elif selected_mode == "✏️ Praktek":
                 
                 with col2:
                     if st.button("👁️ Lihat Kode Asli", use_container_width=True):
-                        with st.expander("📖 Kode Asli"):
+                        with st.expander("📖 Kode Asli", expanded=True):
                             st.code(current_segment, language=code_type)
                 
                 with col3:
                     if st.button("🔄 Ulang Hafalan", use_container_width=True):
                         st.session_state.hafalan_timer_start = time.time()
                         st.session_state.show_hafalan_results = False
+                        st.session_state.auto_editor_shown = False
                         st.rerun()
                 
                 # Tampilkan hasil hafalan
@@ -1643,7 +2284,8 @@ elif selected_mode == "✏️ Praktek":
                                     st.session_state.hafalan_start_time = time.time()
                                     st.session_state.show_hafalan_editor = False
                                     st.session_state.show_hafalan_results = False
-                                    st.session_state.hafalan_timer_start = time.time()
+                                    st.session_state.hafalan_timer_start = None
+                                    st.session_state.auto_editor_shown = False
                                     st.rerun()
                             else:
                                 if st.button("✅ Selesai Hafalan", type="primary", use_container_width=True):
@@ -1663,7 +2305,8 @@ elif selected_mode == "✏️ Praktek":
                                 st.session_state.hafalan_start_time = time.time()
                                 st.session_state.show_hafalan_editor = False
                                 st.session_state.show_hafalan_results = False
-                                st.session_state.hafalan_timer_start = time.time()
+                                st.session_state.hafalan_timer_start = None
+                                st.session_state.auto_editor_shown = False
                                 st.rerun()
                     
                     with col2:
@@ -1677,6 +2320,7 @@ elif selected_mode == "✏️ Praktek":
                             st.session_state.hafalan_source_selected = False
                             st.session_state.show_hafalan_editor = False
                             st.session_state.show_hafalan_results = False
+                            st.session_state.hafalan_timer_start = None
                             st.rerun()
                     
                     # Tampilkan perbandingan jika diminta
@@ -1684,13 +2328,24 @@ elif selected_mode == "✏️ Praktek":
                         st.markdown("---")
                         st.markdown("### 🔍 Perbandingan Kode")
                         
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            st.markdown("**Kode Kamu:**")
+                        tab_comp1, tab_comp2, tab_comp3 = st.tabs(["Kode Kamu", "Kode Asli", "Side by Side"])
+                        
+                        with tab_comp1:
+                            st.markdown("**Kode yang kamu tulis:**")
                             st.code(st.session_state.last_user_code, language=code_type)
-                        with col_b:
-                            st.markdown("**Kode Asli:**")
+                        
+                        with tab_comp2:
+                            st.markdown("**Kode asli yang harusnya:**")
                             st.code(current_segment, language=code_type)
+                        
+                        with tab_comp3:
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.markdown("**Kode Kamu:**")
+                                st.code(st.session_state.last_user_code, language=code_type)
+                            with col_b:
+                                st.markdown("**Kode Asli:**")
+                                st.code(current_segment, language=code_type)
             
             # Navigation untuk pindah segment (jika lebih dari 1)
             if total_segments > 1:
@@ -1705,6 +2360,7 @@ elif selected_mode == "✏️ Praktek":
                             st.session_state.hafalan_start_time = time.time()
                             st.session_state.show_hafalan_editor = False
                             st.session_state.show_hafalan_results = False
+                            st.session_state.hafalan_timer_start = None
                             st.rerun()
                 
                 with col2:
@@ -1714,6 +2370,7 @@ elif selected_mode == "✏️ Praktek":
                         st.session_state.hafalan_start_time = time.time()
                         st.session_state.show_hafalan_editor = False
                         st.session_state.show_hafalan_results = False
+                        st.session_state.hafalan_timer_start = None
                         st.rerun()
                 
                 with col3:
@@ -1727,6 +2384,7 @@ elif selected_mode == "✏️ Praktek":
                         st.session_state.hafalan_start_time = time.time()
                         st.session_state.show_hafalan_editor = False
                         st.session_state.show_hafalan_results = False
+                        st.session_state.hafalan_timer_start = None
                         st.session_state.memorized_parts = {}
                         st.rerun()
                 
@@ -1740,16 +2398,26 @@ elif selected_mode == "✏️ Praktek":
                                       expanded=i==current_index):
                             st.code(segment, language=code_type)
                             
-                            if st.button(f"Pilih Bagian {i+1}", key=f"select_{i}"):
-                                st.session_state.current_segment_index = i
-                                st.session_state.hafalan_start_time = time.time()
-                                st.session_state.show_hafalan_editor = False
-                                st.session_state.show_hafalan_results = False
-                                st.session_state.show_all_segments = False
-                                st.rerun()
+                            col_btn1, col_btn2 = st.columns(2)
+                            with col_btn1:
+                                if st.button(f"Pilih Bagian {i+1}", key=f"select_{i}"):
+                                    st.session_state.current_segment_index = i
+                                    st.session_state.hafalan_start_time = time.time()
+                                    st.session_state.show_hafalan_editor = False
+                                    st.session_state.show_hafalan_results = False
+                                    st.session_state.show_all_segments = False
+                                    st.session_state.hafalan_timer_start = None
+                                    st.rerun()
+                            with col_btn2:
+                                # Tampilkan skor hafalan jika ada
+                                key = f"{selected_topic}_{i}" if st.session_state.hafalan_source != "custom" else f"custom_{i}"
+                                if key in st.session_state.memorized_parts:
+                                    scores = st.session_state.memorized_parts[key]
+                                    avg_score = sum(scores) / len(scores)
+                                    st.metric("Rata-rata", f"{avg_score:.1f}%")
 
 # =========================
-# SIMULASI MODE (TETAP SAMA - TIDAK DIUBAH)
+# SIMULASI MODE
 # =========================
 elif selected_mode == "🎯 Simulasi":
     st.title("🎯 Mode Simulasi USK")
@@ -1794,23 +2462,30 @@ elif selected_mode == "🎯 Simulasi":
         minutes = int(remaining // 60)
         seconds = int(remaining % 60)
         
-        # Timer display
-        col_time1, col_time2, col_time3 = st.columns(3)
-        with col_time1:
-            st.metric("⏱️ Waktu Tersisa", f"{minutes:02d}:{seconds:02d}")
-        with col_time2:
-            current_q = st.session_state.current_question + 1
-            total_q = len(st.session_state.simulation_questions)
-            st.metric("📝 Soal", f"{current_q}/{total_q}")
-        with col_time3:
-            progress = elapsed / (simulation_time * 60)
-            st.metric("📊 Progress", f"{int(progress*100)}%")
+        # Timer display dengan auto refresh
+        timer_placeholder = st.empty()
+        with timer_placeholder.container():
+            col_time1, col_time2, col_time3 = st.columns(3)
+            with col_time1:
+                st.metric("⏱️ Waktu Tersisa", f"{minutes:02d}:{seconds:02d}")
+            with col_time2:
+                current_q = st.session_state.current_question + 1
+                total_q = len(st.session_state.simulation_questions)
+                st.metric("📝 Soal", f"{current_q}/{total_q}")
+            with col_time3:
+                progress = elapsed / (simulation_time * 60)
+                st.metric("📊 Progress", f"{int(progress*100)}%")
+            
+            st.progress(min(1.0, progress))
         
-        st.progress(min(1.0, progress))
-        
-        if remaining <= 0:
+        # Auto refresh timer setiap detik
+        if remaining > 0:
+            time.sleep(1)
+            st.rerun()
+        else:
             st.error("⏰ WAKTU HABIS! Simulasi berakhir.")
             st.session_state.simulation_active = False
+            st.rerun()
         
         # Current question
         current_q = st.session_state.current_question
@@ -1838,7 +2513,7 @@ elif selected_mode == "🎯 Simulasi":
             # Pilih baris yang penting untuk di-blank
             important_lines = []
             for i, line in enumerate(code_lines):
-                if any(keyword in line for keyword in ["session_start", "include", "SELECT", "INSERT", "UPDATE", "DELETE", "WHERE", "header", "exit"]):
+                if any(keyword in line for keyword in ["session_start", "include", "require", "SELECT", "INSERT", "UPDATE", "DELETE", "WHERE", "header", "exit"]):
                     important_lines.append(i)
             
             if len(important_lines) > 5:
@@ -1862,7 +2537,7 @@ elif selected_mode == "🎯 Simulasi":
             answer = st.text_area(
                 "Jawaban (sebutkan nomor baris dan kodenya):",
                 height=150,
-                placeholder=f"Contoh:\n{line_numbers[0] if line_numbers else 1}. session_start();\n{line_numbers[1] if len(line_numbers) > 1 else 2}. include 'koneksi.php';",
+                placeholder=f"Contoh:\n{line_numbers[0] if line_numbers else 1}. session_start();\n{line_numbers[1] if len(line_numbers) > 1 else 2}. require 'koneksi.php';",
                 key=f"simulation_q_{current_q}"
             )
         
@@ -1880,7 +2555,7 @@ elif selected_mode == "🎯 Simulasi":
             if "WHERE" in original_code:
                 lines = buggy_code.split('\n')
                 for i, line in enumerate(lines):
-                    if "WHERE" in line and "UPDATE" in line or "DELETE" in line:
+                    if "WHERE" in line and ("UPDATE" in line or "DELETE" in line):
                         lines[i] = line.replace("WHERE", "// WHERE")
                         bugs_introduced.append("WHERE clause di-comment")
                 buggy_code = '\n'.join(lines)
@@ -1963,7 +2638,7 @@ elif selected_mode == "🎯 Simulasi":
                         elif simulation_mode == "Debugging":
                             # Count bugs found (simple version)
                             bugs_found = 0
-                            common_bugs = ["session_start", "WHERE", "exit()", "header()"]
+                            common_bugs = ["session_start", "WHERE", "exit()", "header()", "require", "include"]
                             for bug in common_bugs:
                                 if bug in user_answer:
                                     bugs_found += 1
@@ -2097,7 +2772,7 @@ elif selected_mode == "🎯 Simulasi":
                 st.rerun()
 
 # =========================
-# PROGRESS MODE (DIPERBAIKI)
+# PROGRESS MODE
 # =========================
 elif selected_mode == "📊 Progress":
     st.title("📊 Progress Belajar")
@@ -2297,12 +2972,12 @@ elif selected_mode == "📊 Progress":
                 st.success("Progress berhasil diexport!")
 
 # =========================
-# QUIZ MODE (TETAP SAMA)
+# QUIZ MODE
 # =========================
 elif selected_mode == "❓ Quiz":
     st.title("❓ Quick Quiz - Test Pemahaman")
     
-    # Quiz questions database
+    # Quiz questions database (updated with new topics)
     quiz_db = [
         {
             "question": "Di mana session_start() harus diletakkan dalam script PHP?",
@@ -2317,6 +2992,18 @@ elif selected_mode == "❓ Quiz":
             "explanation": "session_start() HARUS dipanggil sebelum output apapun (termasuk spasi atau newline) ke browser."
         },
         {
+            "question": "Apa perbedaan antara require dan include di PHP?",
+            "options": [
+                "require menghasilkan fatal error jika file tidak ditemukan, include hanya warning",
+                "include menghasilkan fatal error, require hanya warning",
+                "Tidak ada perbedaan",
+                "require untuk CSS, include untuk PHP"
+            ],
+            "answer": 0,
+            "category": "PHP Include",
+            "explanation": "require akan menghentikan eksekusi script jika file tidak ditemukan, sedangkan include hanya memberikan warning."
+        },
+        {
             "question": "Apa yang terjadi jika UPDATE query tidak menggunakan WHERE clause?",
             "options": [
                 "Hanya data pertama yang terupdate",
@@ -2329,64 +3016,52 @@ elif selected_mode == "❓ Quiz":
             "explanation": "UPDATE tanpa WHERE akan mengubah SEMUA baris dalam tabel! Sangat berbahaya."
         },
         {
-            "question": "Attribute apa yang WAJIB ada dalam tag <form> untuk mengirim data ke PHP?",
+            "question": "Bagaimana cara membuat filter multiple dengan PHP?",
             "options": [
-                "action dan method",
-                "name dan id",
-                "class dan style",
-                "type dan value"
+                "Gunakan $_GET dengan parameter berbeda untuk setiap filter",
+                "Hanya bisa satu filter dalam satu waktu",
+                "Harus menggunakan JavaScript",
+                "Tidak bisa membuat multiple filter"
             ],
             "answer": 0,
-            "category": "HTML Forms",
-            "explanation": "action menentukan file tujuan, method menentukan cara pengiriman (GET/POST)."
+            "category": "PHP Filter",
+            "explanation": "Gunakan $_GET['category'], $_GET['status'], dll, lalu gabungkan dalam WHERE clause dengan AND."
         },
         {
-            "question": "Property CSS apa yang digunakan untuk membuat grid layout?",
+            "question": "Apa fungsi dari md5() dalam proses pendaftaran?",
             "options": [
-                "display: flex",
-                "display: grid",
-                "display: block",
-                "display: inline"
-            ],
-            "answer": 1,
-            "category": "CSS",
-            "explanation": "display: grid mengaktifkan CSS Grid Layout untuk 2D layouts."
-        },
-        {
-            "question": "Fungsi apa yang digunakan untuk mencegah SQL Injection di PHP?",
-            "options": [
-                "htmlspecialchars()",
-                "mysqli_real_escape_string()",
-                "strip_tags()",
-                "trim()"
-            ],
-            "answer": 1,
-            "category": "PHP Security",
-            "explanation": "mysqli_real_escape_string() meng-escape karakter khusus dalam string untuk digunakan dalam query SQL."
-        },
-        {
-            "question": "Apa fungsi dari md5() dalam proses login?",
-            "options": [
-                "Mengenkripsi password",
-                "Mengkompres data",
+                "Mengenkripsi password menjadi hash",
+                "Mengkompres data user",
                 "Validasi format email",
-                "Membersihkan input user"
+                "Membersihkan input dari SQL injection"
             ],
             "answer": 0,
             "category": "PHP Security",
             "explanation": "md5() membuat hash dari password untuk disimpan di database (lebih baik gunakan password_hash())."
         },
         {
-            "question": "Bagaimana cara mengambil data dari form dengan method POST di PHP?",
+            "question": "Bagaimana cara membuat sistem favorit tanpa database?",
             "options": [
-                "$_GET['nama_field']",
-                "$_POST['nama_field']",
-                "$_REQUEST['nama_field']",
-                "$_FORM['nama_field']"
+                "Menggunakan $_SESSION untuk menyimpan status favorit",
+                "Tidak bisa tanpa database",
+                "Menggunakan cookies",
+                "Menggunakan file text"
             ],
-            "answer": 1,
-            "category": "PHP Forms",
-            "explanation": "$_POST adalah superglobal array yang berisi data dari form dengan method POST."
+            "answer": 0,
+            "category": "PHP Session",
+            "explanation": "$_SESSION bisa digunakan untuk menyimpan data sementara seperti status favorit."
+        },
+        {
+            "question": "Apa keuntungan menggunakan HTML5 input type='email'?",
+            "options": [
+                "Validasi format email otomatis di browser",
+                "Membuat tampilan lebih menarik",
+                "Mempercepat loading halaman",
+                "Mencegah SQL injection"
+            ],
+            "answer": 0,
+            "category": "HTML Forms",
+            "explanation": "type='email' memberikan validasi client-side otomatis untuk format email."
         },
         {
             "question": "Apa yang harus dilakukan setelah header('location: ...')?",
@@ -2401,28 +3076,28 @@ elif selected_mode == "❓ Quiz":
             "explanation": "exit() atau die() diperlukan untuk menghentikan eksekusi script setelah redirect."
         },
         {
-            "question": "Apa perbedaan utama GET dan POST?",
+            "question": "Bagaimana cara membuat responsive grid layout dengan CSS?",
             "options": [
-                "GET untuk mengambil data, POST untuk mengirim data",
-                "GET lebih aman daripada POST",
-                "POST lebih cepat daripada GET",
-                "Tidak ada perbedaan"
+                "display: grid dengan grid-template-columns: repeat(auto-fill, minmax())",
+                "display: block dengan width: 100%",
+                "table layout dengan colspan",
+                "position: absolute dengan media queries"
             ],
             "answer": 0,
-            "category": "HTTP Methods",
-            "explanation": "GET untuk request data (terlihat di URL), POST untuk submit data (tertutup)."
+            "category": "CSS Layout",
+            "explanation": "CSS Grid dengan auto-fill dan minmax() membuat layout yang responsive otomatis."
         },
         {
-            "question": "Apa fungsi dari JOIN dalam SQL?",
+            "question": "Apa fungsi dari LEFT JOIN dalam SQL?",
             "options": [
-                "Menggabungkan data dari multiple tables",
-                "Menghapus duplicate data",
-                "Mengurutkan data",
-                "Membatasi jumlah data"
+                "Mengambil semua data dari tabel kiri meski tidak ada match di tabel kanan",
+                "Hanya mengambil data yang ada di kedua tabel",
+                "Mengurutkan data dari kiri ke kanan",
+                "Menggabungkan tabel secara vertikal"
             ],
             "answer": 0,
             "category": "SQL",
-            "explanation": "JOIN menggabungkan rows dari dua atau lebih tables berdasarkan related column."
+            "explanation": "LEFT JOIN mengambil semua records dari tabel kiri (todo), meski tidak ada matching records di tabel kanan (category)."
         }
     ]
     
@@ -2549,8 +3224,9 @@ elif selected_mode == "❓ Quiz":
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p>📚 <b>PerpusCode USK - All-in-One Learning Platform</b> | Versi 2.2</p>
-    <p>📖 Learn • ✍️ Practice • 🧠 Memorize Custom • 🎯 Simulate • 📊 Track • ❓ Quiz</p>
-    <p>💪 <b>Fitur Baru:</b> Input kode custom untuk dihafal sesuai kebutuhan!</p>
+    <p>📚 <b>PerpusCode USK - All-in-One Learning Platform</b> | Versi 3.0</p>
+    <p>📖 <b>Materi Baru:</b> Index Page Filter & Favorit • Form Daftar • Halaman Profil • CSS Full Project</p>
+    <p>🧠 <b>Fitur Enhanced:</b> Timer Otomatis • Auto Refresh • Perbaikan Bug • UI/UX Lebih Baik</p>
+    <p>💪 <b>Siap USK:</b> Learn • Practice • Memorize • Simulate • Track • Quiz</p>
 </div>
 """, unsafe_allow_html=True)
