@@ -7,7 +7,7 @@ from datetime import datetime
 from difflib import SequenceMatcher
 
 st.set_page_config(
-    page_title="PerpusCode USK - Lengkap",
+    page_title="PerpusCode USK - Hafalan Kode Custom",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -22,21 +22,21 @@ if 'quiz_scores' not in st.session_state:
     st.session_state.quiz_scores = []
 if 'last_viewed' not in st.session_state:
     st.session_state.last_viewed = []
-if 'study_progress' not in st.session_state:
-    st.session_state.study_progress = {
-        "hari_1": False,
-        "hari_2": False,
-        "hari_3": False,
-        "hari_4": False,
-        "hari_5": False,
-        "hari_6": False,
-        "hari_7": False
-    }
+if 'hafalan_mode' not in st.session_state:
+    st.session_state.hafalan_mode = False
+if 'custom_code_to_memorize' not in st.session_state:
+    st.session_state.custom_code_to_memorize = ""
+if 'original_full_code' not in st.session_state:
+    st.session_state.original_full_code = ""
 if 'current_mode' not in st.session_state:
     st.session_state.current_mode = "🏠 Dashboard"
+if 'memorized_parts' not in st.session_state:
+    st.session_state.memorized_parts = {}
+if 'user_custom_codes' not in st.session_state:
+    st.session_state.user_custom_codes = {}
 
 # =========================
-# DATASET MATERI LENGKAP
+# DATASET MATERI LENGKAP (TETAP SAMA)
 # =========================
 materi = {
     # ---------- SESSION ----------
@@ -899,6 +899,42 @@ def analyze_code_errors(user_code, correct_code, code_type):
     
     return errors, warnings, suggestions
 
+def extract_code_segments(full_code, num_segments=3):
+    """Ekstrak bagian-bagian kode yang penting untuk dihafal"""
+    lines = full_code.split('\n')
+    segments = []
+    
+    # Cari bagian-bagian kritis
+    keywords = ["session_start", "include", "SELECT", "INSERT", "UPDATE", "DELETE", 
+                "WHERE", "header(", "exit", "mysqli_query", "DOCTYPE", "<form", 
+                "display:", "grid-template", "function", "if(", "while(", "foreach"]
+    
+    current_segment = []
+    for line in lines:
+        if any(keyword in line for keyword in keywords):
+            if current_segment:
+                segments.append('\n'.join(current_segment))
+                current_segment = []
+            # Ambil beberapa line sekitar keyword
+            line_idx = lines.index(line)
+            start = max(0, line_idx - 1)
+            end = min(len(lines), line_idx + 3)
+            segment = '\n'.join(lines[start:end])
+            segments.append(segment)
+    
+    # Jika tidak cukup segment, bagi menjadi bagian-bagian
+    if len(segments) < num_segments:
+        segment_size = len(lines) // num_segments
+        segments = []
+        for i in range(num_segments):
+            start = i * segment_size
+            end = (i + 1) * segment_size if i < num_segments - 1 else len(lines)
+            if end - start > 5:  # Minimal 5 baris
+                segments.append('\n'.join(lines[start:end]))
+    
+    # Pilih 3 segment terbaik
+    return segments[:min(num_segments, len(segments))]
+
 # =========================
 # SIDEBAR NAVIGATION
 # =========================
@@ -936,6 +972,12 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # Toggle Hafalan Mode
+    hafalan_aktif = st.checkbox("🧠 Mode Hafalan Kode", value=st.session_state.hafalan_mode)
+    if hafalan_aktif != st.session_state.hafalan_mode:
+        st.session_state.hafalan_mode = hafalan_aktif
+        st.rerun()
+    
     # Quick stats
     if selected_topic in st.session_state.practice_scores:
         latest_score = st.session_state.practice_scores[selected_topic][-1]
@@ -947,6 +989,14 @@ with st.sidebar:
     with st.expander("📖 Riwayat Materi"):
         for item in reversed(st.session_state.last_viewed):
             st.caption(f"✓ {item}")
+        
+        # Tampilkan custom codes yang sudah dibuat
+        if st.session_state.user_custom_codes:
+            st.markdown("---")
+            st.markdown("**🧠 Kode Custom:**")
+            for topic, codes in st.session_state.user_custom_codes.items():
+                for i, code in enumerate(codes):
+                    st.caption(f"• {topic} - Bagian {i+1}")
 
 # =========================
 # DASHBOARD MODE
@@ -972,37 +1022,37 @@ if selected_mode == "🏠 Dashboard":
         else:
             st.metric("Rata-rata Skor", "0%")
     with col4:
-        total_simulations = len(st.session_state.quiz_scores)
-        st.metric("Total Simulasi", total_simulations)
+        # Hitung total kode custom yang dibuat
+        total_custom = sum(len(codes) for codes in st.session_state.user_custom_codes.values())
+        st.metric("Kode Custom", total_custom)
     
-    # Study plan
+    # Fitur baru: Hafalan Kode Custom
     st.markdown("---")
-    st.subheader("📅 Rencana Belajar 7 Hari")
+    st.subheader("🧠 Fitur Baru: Hafalan Kode Custom")
     
-    study_plan = [
-        ("Hari 1", "Session & Login", ["Login Page (HTML)", "Proses Login (Session)"]),
-        ("Hari 2", "CRUD - Read", ["Index Page (Read + Filter)"]),
-        ("Hari 3", "CRUD - Create", ["Form Tambah Data (Create)", "Proses Tambah (INSERT)"]),
-        ("Hari 4", "CRUD - Update", ["Form Edit Data", "Proses Edit (UPDATE)"]),
-        ("Hari 5", "CRUD - Delete", ["Proses Hapus (DELETE)"]),
-        ("Hari 6", "CSS Styling", ["CSS Grid Layout", "Navbar CSS", "Button Styling"]),
-        ("Hari 7", "Review & Simulasi", ["Semua Materi"])
-    ]
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info("""
+        **🎯 Fitur Hafalan Kode CUSTOM:**
+        
+        1. **Pilih bagian kode** yang ingin dihafal
+        2. **Atau buat kode custom** sendiri
+        3. **Set timer** untuk menghafal
+        4. **Tulis dari ingatan**
+        5. **Dapatkan analisis** detail
+        6. **Simpan progress** hafalan
+        """)
     
-    for day, topic, materials in study_plan:
-        with st.expander(f"{day}: {topic}", expanded=False):
-            for material in materials:
-                if material in materi_list:
-                    status = "✅" if material in st.session_state.practice_scores else "⏳"
-                    st.markdown(f"{status} {material}")
-            
-            day_num = int(day.split()[1])
-            if not st.session_state.study_progress[f"hari_{day_num}"]:
-                if st.button(f"✅ Tandai {day} Selesai", key=f"complete_{day_num}"):
-                    st.session_state.study_progress[f"hari_{day_num}"] = True
-                    st.rerun()
-            else:
-                st.success(f"{day} sudah selesai dipelajari!")
+    with col2:
+        st.success("""
+        **✨ Fleksibel & Personal:**
+        
+        • Bisa pilih dari materi yang ada
+        • Bisa input kode custom sendiri
+        • Pilih bahasa: PHP, HTML, CSS, JS
+        • Atur waktu menghafal sesuai kemampuan
+        • Simpan kode favorit untuk latihan
+        """)
     
     # Quick actions
     st.markdown("---")
@@ -1018,8 +1068,10 @@ if selected_mode == "🏠 Dashboard":
             st.session_state.current_mode = "✏️ Praktek"
             st.rerun()
     with col3:
-        if st.button("🎯 Simulasi USK", use_container_width=True, type="primary"):
-            st.session_state.current_mode = "🎯 Simulasi"
+        if st.button("🧠 Buat Hafalan Custom", use_container_width=True, type="primary"):
+            st.session_state.current_mode = "✏️ Praktek"
+            st.session_state.hafalan_mode = True
+            st.session_state.show_custom_input = True
             st.rerun()
 
 # =========================
@@ -1040,7 +1092,7 @@ elif selected_mode == "📖 Belajar":
     st.markdown(f"**Deskripsi:** {topic_data['deskripsi']}")
     
     # Tabs
-    tab1, tab2, tab3 = st.tabs(["📝 Kode Lengkap", "📚 Penjelasan", "💡 Tips"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 Kode Lengkap", "📚 Penjelasan", "💡 Tips", "🧠 Buat Hafalan"])
     
     with tab1:
         st.code(topic_data["kode"], language=topic_data["tipe"])
@@ -1115,223 +1167,589 @@ elif selected_mode == "📖 Belajar":
             3. Test on multiple screen sizes
             4. Use developer tools for debugging
             """)
+    
+    with tab4:
+        st.markdown("### 🧠 Buat Hafalan dari Materi Ini")
         
-        # Practice button
-        st.markdown("---")
-        if st.button("✏️ Praktekan Materi Ini", type="primary"):
-            st.session_state.current_mode = "✏️ Praktek"
-            st.rerun()
+        # Pilihan: Auto extract atau manual select
+        hafalan_type = st.radio(
+            "Pilih cara membuat hafalan:",
+            ["Auto Extract (Program pilih bagian penting)", "Manual Select (Saya pilih sendiri)"]
+        )
+        
+        if hafalan_type == "Auto Extract":
+            # Auto extract segments
+            segments = extract_code_segments(topic_data["kode"], 3)
+            
+            st.markdown("#### 📋 Bagian-bagian yang akan dihafal:")
+            for i, segment in enumerate(segments):
+                with st.expander(f"Bagian {i+1}", expanded=i==0):
+                    st.code(segment, language=topic_data["tipe"])
+            
+            if st.button("✅ Gunakan untuk Hafalan", type="primary"):
+                st.session_state.code_segments = segments
+                st.session_state.current_segment_index = 0
+                st.session_state.hafalan_mode = True
+                st.session_state.current_mode = "✏️ Praktek"
+                st.rerun()
+        
+        else:  # Manual Select
+            st.markdown("#### ✍️ Pilih/Salin bagian kode yang ingin dihafal:")
+            
+            # Tampilkan kode dengan line numbers untuk memudahkan pemilihan
+            code_lines = topic_data["kode"].split('\n')
+            line_numbers = list(range(1, len(code_lines) + 1))
+            
+            # Buat text area untuk user memilih bagian
+            st.markdown("**Kode lengkap:**")
+            st.code(topic_data["kode"], language=topic_data["tipe"])
+            
+            st.markdown("**Salin bagian yang ingin dihafal:**")
+            custom_code = st.text_area(
+                "Tempel/salin kode yang ingin dihafal:",
+                height=200,
+                placeholder="Salin bagian kode dari atas yang ingin kamu hafal...\nContoh:\nsession_start();\ninclude '../koneksi.php';\n// ... dst",
+                key="manual_select_code"
+            )
+            
+            if st.button("✅ Buat Hafalan Custom", type="primary"):
+                if custom_code.strip():
+                    st.session_state.custom_code_to_memorize = custom_code
+                    st.session_state.hafalan_mode = True
+                    st.session_state.current_mode = "✏️ Praktek"
+                    st.session_state.is_custom_code = True
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Silakan masukkan kode yang ingin dihafal!")
+        
+        # Tampilkan custom codes yang sudah dibuat untuk materi ini
+        if selected_topic in st.session_state.user_custom_codes:
+            st.markdown("---")
+            st.markdown("#### 📚 Hafalan Custom yang Sudah Dibuat:")
+            custom_codes = st.session_state.user_custom_codes[selected_topic]
+            
+            for i, code in enumerate(custom_codes):
+                with st.expander(f"Hafalan Custom {i+1}", expanded=False):
+                    st.code(code[:500] + "..." if len(code) > 500 else code, language=topic_data["tipe"])
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button(f"🔄 Gunakan Lagi {i+1}", key=f"use_custom_{i}"):
+                            st.session_state.custom_code_to_memorize = code
+                            st.session_state.hafalan_mode = True
+                            st.session_state.current_mode = "✏️ Praktek"
+                            st.session_state.is_custom_code = True
+                            st.rerun()
+                    with col2:
+                        if st.button(f"🗑️ Hapus {i+1}", key=f"delete_custom_{i}"):
+                            st.session_state.user_custom_codes[selected_topic].pop(i)
+                            if not st.session_state.user_custom_codes[selected_topic]:
+                                del st.session_state.user_custom_codes[selected_topic]
+                            st.rerun()
 
 # =========================
-# PRAKTEK MODE
+# PRAKTEK MODE (DENGAN FITUR HAFALAN CUSTOM)
 # =========================
 elif selected_mode == "✏️ Praktek":
     st.title("✏️ Mode Praktek Menulis Kode")
     
-    topic_data = materi[selected_topic]
+    # Toggle untuk pilihan mode
+    if not st.session_state.hafalan_mode:
+        # MODE NORMAL - Pilihan awal
+        st.markdown("### 📋 Pilih Mode Praktek:")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📝 Praktek Normal", use_container_width=True, type="primary"):
+                st.session_state.hafalan_mode = False
+                st.rerun()
+        
+        with col2:
+            if st.button("🧠 Mode Hafalan", use_container_width=True, type="primary"):
+                st.session_state.hafalan_mode = True
+                st.rerun()
+        
+        # Penjelasan singkat
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info("""
+            **📝 Praktek Normal:**
+            - Tulis kode lengkap
+            - Dengan petunjuk & timer
+            - Analisis similarity
+            - Cocok untuk latihan umum
+            """)
+        
+        with col2:
+            st.success("""
+            **🧠 Mode Hafalan:**
+            - Fokus menghafal bagian spesifik
+            - Bisa custom atau dari materi
+            - Timer menghafal khusus
+            - Cocok untuk persiapan USK
+            """)
     
-    # Settings
-    col1, col2 = st.columns(2)
-    with col1:
-        timer_minutes = st.slider("⏱️ Waktu (menit):", 5, 30, 10)
-    with col2:
-        show_hints = st.checkbox("💡 Tampilkan Petunjuk", value=True)
-    
-    # Timer
-    if 'practice_start_time' not in st.session_state:
-        st.session_state.practice_start_time = time.time()
-    
-    elapsed = time.time() - st.session_state.practice_start_time
-    remaining = max(0, timer_minutes * 60 - elapsed)
-    
-    minutes = int(remaining // 60)
-    seconds = int(remaining % 60)
-    
-    col_time1, col_time2 = st.columns(2)
-    with col_time1:
-        st.markdown(f"**⏰ Waktu tersisa:** {minutes:02d}:{seconds:02d}")
-    with col_time2:
-        if remaining <= 0:
-            st.error("⏰ WAKTU HABIS!")
-        else:
-            st.progress(min(1.0, elapsed/(timer_minutes*60)))
-    
-    # Instructions
-    st.markdown("---")
-    st.markdown(f"### 📝 TUGAS: {selected_topic}")
-    st.markdown(f"**Deskripsi:** {topic_data['deskripsi']}")
-    
-    # Hints
-    if show_hints:
-        with st.expander("💡 Petunjuk & Requirements", expanded=True):
-            st.markdown("**Bagian WAJIB ada (paling penting):**")
-            for i, part in enumerate(topic_data["critical_parts"][:4]):
-                st.markdown(f"{i+1}. `{part}`")
+    elif st.session_state.hafalan_mode:
+        # MULAI MODE HAFALAN
+        st.warning("🧠 **MODE HAFALAN AKTIF**")
+        
+        # Pilih sumber kode untuk dihafal
+        if 'hafalan_source_selected' not in st.session_state:
+            st.session_state.hafalan_source_selected = False
+        
+        if not st.session_state.hafalan_source_selected:
+            st.markdown("### 📋 Pilih Sumber Kode untuk Dihafal:")
             
-            st.markdown("**Tips:**")
-            st.markdown("• Fokus pada struktur kode yang benar")
-            st.markdown("• Pastikan semua bagian kritis ada")
-            st.markdown("• Perhatikan detail seperti titik koma dan kurung")
-    
-    # Code editor
-    st.markdown("### ✍️ Tulis Kode Kamu:")
-    
-    user_code = st.text_area(
-        "Ketik kode di bawah ini:",
-        height=350,
-        placeholder=f"Mulai mengetik kode {topic_data['tipe'].upper()} di sini...\n\nContoh: {'<?php' if topic_data['tipe'] == 'php' else '<!DOCTYPE html>' if topic_data['tipe'] == 'html' else '/* CSS Code */'}",
-        key="practice_editor"
-    )
-    
-    # Action buttons
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("✅ Submit & Analisis", type="primary", use_container_width=True):
-            if user_code.strip():
-                # Hitung similarity
-                similarity = calculate_similarity(user_code, topic_data["kode"])
+            tab1, tab2 = st.tabs(["📚 Dari Materi", "✍️ Custom Code"])
+            
+            with tab1:
+                # Pilih dari materi yang ada
+                topic_data = materi[selected_topic]
                 
-                # Cek critical parts
-                critical_results = check_critical_parts(user_code, topic_data["critical_parts"])
+                st.markdown(f"**Materi:** {selected_topic}")
+                st.markdown(f"**Tipe:** {topic_data['tipe'].upper()}")
                 
-                # Analisis errors
-                errors, warnings, suggestions = analyze_code_errors(
-                    user_code, 
-                    topic_data["kode"], 
-                    topic_data["tipe"]
+                # Tampilkan kode lengkap
+                with st.expander("👁️ Lihat Kode Lengkap", expanded=False):
+                    st.code(topic_data["kode"], language=topic_data["tipe"])
+                
+                # Pilihan: Auto atau Manual
+                st.markdown("#### 🎯 Pilih Bagian untuk Dihafal:")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🤖 Auto Pilih 3 Bagian", use_container_width=True):
+                        segments = extract_code_segments(topic_data["kode"], 3)
+                        st.session_state.code_segments = segments
+                        st.session_state.current_segment_index = 0
+                        st.session_state.hafalan_source = "auto_material"
+                        st.session_state.hafalan_source_selected = True
+                        st.session_state.hafalan_start_time = time.time()
+                        st.rerun()
+                
+                with col2:
+                    if st.button("✋ Saya Pilih Sendiri", use_container_width=True):
+                        st.session_state.show_manual_select = True
+                        st.rerun()
+                
+                # Jika user memilih manual select
+                if 'show_manual_select' in st.session_state and st.session_state.show_manual_select:
+                    st.markdown("---")
+                    st.markdown("#### ✍️ Pilih Bagian Kode:")
+                    
+                    # Tampilkan kode dengan checkbox per bagian
+                    code_parts = topic_data["kode"].split('\n\n')  # Bagi berdasarkan paragraf kosong
+                    
+                    selected_parts = []
+                    for i, part in enumerate(code_parts):
+                        if len(part.strip()) > 10:  # Hanya bagian yang cukup panjang
+                            col1, col2 = st.columns([1, 4])
+                            with col1:
+                                select = st.checkbox(f"Pilih", key=f"part_{i}")
+                            with col2:
+                                st.code(part[:200] + "..." if len(part) > 200 else part, 
+                                      language=topic_data["tipe"])
+                            
+                            if select:
+                                selected_parts.append(part)
+                    
+                    if selected_parts:
+                        if st.button("✅ Gunakan Bagian Terpilih", type="primary"):
+                            st.session_state.code_segments = selected_parts
+                            st.session_state.current_segment_index = 0
+                            st.session_state.hafalan_source = "manual_material"
+                            st.session_state.hafalan_source_selected = True
+                            st.session_state.hafalan_start_time = time.time()
+                            st.rerun()
+                    else:
+                        st.warning("Pilih minimal 1 bagian kode")
+            
+            with tab2:
+                # Input custom code
+                st.markdown("#### ✍️ Buat Hafalan Custom")
+                
+                # Pilih tipe kode
+                code_type = st.selectbox(
+                    "Pilih Bahasa/Tipe Kode:",
+                    ["php", "html", "css", "javascript", "sql", "lainnya"]
                 )
                 
-                # Simpan score
-                if selected_topic not in st.session_state.practice_scores:
-                    st.session_state.practice_scores[selected_topic] = []
-                st.session_state.practice_scores[selected_topic].append(similarity)
+                # Input kode custom
+                custom_code = st.text_area(
+                    "Masukkan kode yang ingin dihafal:",
+                    height=300,
+                    placeholder="Contoh:\n<?php\nsession_start();\ninclude 'koneksi.php';\n\n$username = $_POST['username'];\n// ... tambahkan kode lainnya",
+                    key="custom_code_input"
+                )
                 
-                # Tampilkan hasil
-                st.session_state.show_practice_results = True
-                st.session_state.last_similarity = similarity
-                st.session_state.last_errors = errors
-                st.session_state.last_warnings = warnings
-                st.session_state.last_suggestions = suggestions
-                st.session_state.critical_results = critical_results
+                # Beri nama untuk kode ini
+                code_name = st.text_input(
+                    "Beri nama untuk kode ini (opsional):",
+                    placeholder="Contoh: Session Login, CRUD Delete, dll"
+                )
+                
+                if st.button("✅ Buat Hafalan Custom", type="primary"):
+                    if custom_code.strip():
+                        # Simpan kode custom
+                        st.session_state.custom_code_to_memorize = custom_code
+                        st.session_state.custom_code_type = code_type
+                        st.session_state.custom_code_name = code_name or "Kode Custom"
+                        st.session_state.hafalan_source = "custom"
+                        st.session_state.hafalan_source_selected = True
+                        st.session_state.hafalan_start_time = time.time()
+                        
+                        # Simpan ke daftar custom codes
+                        if "Custom" not in st.session_state.user_custom_codes:
+                            st.session_state.user_custom_codes["Custom"] = []
+                        st.session_state.user_custom_codes["Custom"].append(custom_code)
+                        
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Silakan masukkan kode terlebih dahulu!")
+            
+            # Tombol untuk kembali
+            if st.button("⬅️ Kembali ke Pilihan Mode", type="secondary"):
+                st.session_state.hafalan_mode = False
                 st.rerun()
-            else:
-                st.warning("⚠️ Silakan tulis kode terlebih dahulu!")
-    
-    with col2:
-        if st.button("👁️ Lihat Contoh", use_container_width=True):
-            with st.expander("📖 Kode Contoh Lengkap"):
-                st.code(topic_data["kode"], language=topic_data["tipe"])
-    
-    with col3:
-        if st.button("🔄 Reset", use_container_width=True):
-            st.session_state.practice_start_time = time.time()
-            st.session_state.show_practice_results = False
-            st.rerun()
-    
-    # Tampilkan hasil jika ada
-    if 'show_practice_results' in st.session_state and st.session_state.show_practice_results:
-        st.markdown("---")
-        st.markdown("## 📊 HASIL ANALISIS")
         
-        similarity = st.session_state.last_similarity
-        
-        # Score card
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Persentase Kemiripan", f"{similarity}%")
-        with col2:
-            critical_found = sum(1 for _, found, _ in st.session_state.critical_results if found)
-            total_critical = len(st.session_state.critical_results)
-            st.metric("Bagian Kritis", f"{critical_found}/{total_critical}")
-        with col3:
-            if similarity >= 90:
-                grade = "A (Excellent)"
-                color = "green"
-            elif similarity >= 80:
-                grade = "B (Good)"
-                color = "blue"
-            elif similarity >= 70:
-                grade = "C (Fair)"
-                color = "orange"
-            elif similarity >= 60:
-                grade = "D (Poor)"
-                color = "red"
-            else:
-                grade = "E (Need Help)"
-                color = "darkred"
-            st.metric("Grade", grade)
-        
-        # Progress bar dengan warna
-        import streamlit as st
-        
-        # Create custom progress bar with color
-        progress_html = f"""
-        <div style="background-color: #f0f0f0; border-radius: 10px; padding: 3px; margin: 10px 0;">
-            <div style="background-color: {'#4CAF50' if similarity >= 90 else '#2196F3' if similarity >= 80 else '#FF9800' if similarity >= 70 else '#F44336'}; 
-                        width: {similarity}%; 
-                        height: 20px; 
-                        border-radius: 8px;">
-            </div>
-        </div>
-        """
-        st.markdown(progress_html, unsafe_allow_html=True)
-        
-        if similarity >= 90:
-            st.success(f"🎉 **EXCELLENT!** Kode kamu {similarity}% mirip dengan contoh!")
-        elif similarity >= 80:
-            st.info(f"👍 **GOOD JOB!** Kode kamu {similarity}% mirip dengan contoh.")
-        elif similarity >= 70:
-            st.warning(f"⚠️ **FAIR!** Kode kamu {similarity}% mirip. Perbaiki beberapa bagian.")
         else:
-            st.error(f"❌ **NEEDS IMPROVEMENT!** Hanya {similarity}% mirip. Pelajari lagi materinya.")
-        
-        # Critical parts check
-        st.markdown("### 📋 Hasil Cek Bagian Kritis:")
-        cols = st.columns(2)
-        for i, (part, found, icon) in enumerate(st.session_state.critical_results):
-            col_idx = i % 2
-            with cols[col_idx]:
-                if found:
-                    st.success(f"{icon} `{part}`")
+            # TAMPILAN MODE HAFALAN AKTIF
+            # Tentukan kode yang akan dihafal
+            if st.session_state.hafalan_source == "custom":
+                # Custom code
+                code_to_memorize = st.session_state.custom_code_to_memorize
+                code_type = st.session_state.custom_code_type
+                code_name = st.session_state.custom_code_name
+                
+                st.markdown(f"### 🧠 HAFALAN: {code_name}")
+                st.caption(f"Tipe: {code_type.upper()} | Sumber: Custom Code")
+                
+                # Tampilkan sebagai single segment
+                segments = [code_to_memorize]
+                current_index = 0
+                total_segments = 1
+            
+            else:
+                # Dari materi
+                topic_data = materi[selected_topic]
+                code_type = topic_data["tipe"]
+                
+                if st.session_state.hafalan_source == "auto_material":
+                    st.markdown(f"### 🧠 HAFALAN: {selected_topic} (Auto)")
                 else:
-                    st.error(f"{icon} `{part}`")
-        
-        # Errors and warnings
-        if st.session_state.last_errors:
-            st.markdown("#### ❌ Kesalahan Fatal:")
-            for error in st.session_state.last_errors:
-                st.error(error)
-        
-        if st.session_state.last_warnings:
-            st.markdown("#### ⚠️ Peringatan:")
-            for warning in st.session_state.last_warnings:
-                st.warning(warning)
-        
-        if st.session_state.last_suggestions:
-            st.markdown("#### 💡 Saran Perbaikan:")
-            for suggestion in st.session_state.last_suggestions:
-                st.info(suggestion)
-        
-        # Action buttons setelah hasil
-        st.markdown("---")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("🔄 Coba Lagi", type="primary", use_container_width=True):
-                st.session_state.show_practice_results = False
-                st.session_state.practice_start_time = time.time()
-                st.rerun()
-        with col2:
-            if st.button("📚 Pelajari Materi", use_container_width=True):
-                st.session_state.current_mode = "📖 Belajar"
-                st.rerun()
-        with col3:
-            if st.button("🏠 Kembali ke Dashboard", use_container_width=True):
-                st.session_state.current_mode = "🏠 Dashboard"
-                st.rerun()
+                    st.markdown(f"### 🧠 HAFALAN: {selected_topic} (Manual)")
+                
+                st.caption(f"Tipe: {code_type.upper()} | Sumber: Materi")
+                
+                segments = st.session_state.code_segments
+                current_index = st.session_state.current_segment_index
+                total_segments = len(segments)
+            
+            # Tampilkan progress
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Bagian", f"{current_index + 1}/{total_segments}")
+            with col2:
+                # Hitung waktu sudah menghafal
+                elapsed = time.time() - st.session_state.hafalan_start_time
+                minutes = int(elapsed // 60)
+                st.metric("Waktu", f"{minutes:02d}:{int(elapsed % 60):02d}")
+            with col3:
+                # Tombol reset/ulang
+                if st.button("🔄 Ulang Bagian", use_container_width=True):
+                    st.session_state.hafalan_start_time = time.time()
+                    st.session_state.show_hafalan_editor = False
+                    st.session_state.show_hafalan_results = False
+                    st.rerun()
+            
+            # Tampilkan segment untuk dihafal
+            current_segment = segments[current_index]
+            
+            st.markdown("### 📖 HAFALKAN KODE INI:")
+            st.code(current_segment, language=code_type)
+            
+            # Timer dan kontrol hafalan
+            st.markdown("---")
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                hafalan_waktu = st.slider(
+                    "⏱️ Set waktu menghafal (detik):",
+                    30, 600, 120,
+                    key="hafalan_timer_setting"
+                )
+            
+            with col2:
+                if st.button("⏱️ Mulai Hafalan", type="primary", use_container_width=True):
+                    st.session_state.hafalan_timer_start = time.time()
+                    st.session_state.show_hafalan_editor = True
+                    st.session_state.show_hafalan_results = False
+                    st.rerun()
+            
+            # Proses menghafal dengan timer
+            if 'hafalan_timer_start' in st.session_state:
+                elapsed = time.time() - st.session_state.hafalan_timer_start
+                remaining = max(0, hafalan_waktu - elapsed)
+                
+                # Progress bar timer
+                progress = min(1.0, elapsed / hafalan_waktu)
+                st.progress(progress)
+                
+                if remaining > 0:
+                    st.info(f"⏱️ Waktu menghafal tersisa: {int(remaining)} detik")
+                else:
+                    st.error("⏰ WAKTU HABIS! Tutup kode dan tulis dari ingatan.")
+                    
+                    # Auto tampilkan editor setelah waktu habis
+                    if not st.session_state.get('auto_editor_shown', False):
+                        st.session_state.show_hafalan_editor = True
+                        st.session_state.auto_editor_shown = True
+                        st.rerun()
+            
+            # Editor untuk menulis dari ingatan
+            if 'show_hafalan_editor' in st.session_state and st.session_state.show_hafalan_editor:
+                st.markdown("---")
+                st.markdown("### ✍️ TULIS DARI INGATAN:")
+                
+                user_code = st.text_area(
+                    "Tulis kode yang kamu hafal:",
+                    height=250,
+                    placeholder=f"Tulis kode yang baru saja kamu hafal...\nTips: Fokus pada struktur dan sintaks yang benar.",
+                    key=f"hafalan_editor_{current_index}"
+                )
+                
+                # Action buttons
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("✅ Cek Hafalan", type="primary", use_container_width=True):
+                        if user_code.strip():
+                            # Hitung similarity
+                            similarity = calculate_similarity(user_code, current_segment)
+                            
+                            # Analisis kesalahan
+                            errors, warnings, suggestions = analyze_code_errors(
+                                user_code, 
+                                current_segment, 
+                                code_type
+                            )
+                            
+                            # Simpan hasil
+                            st.session_state.show_hafalan_results = True
+                            st.session_state.last_hafalan_similarity = similarity
+                            st.session_state.last_hafalan_errors = errors
+                            st.session_state.last_hafalan_warnings = warnings
+                            st.session_state.last_hafalan_suggestions = suggestions
+                            st.session_state.last_user_code = user_code
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Silakan tulis kode terlebih dahulu!")
+                
+                with col2:
+                    if st.button("👁️ Lihat Kode Asli", use_container_width=True):
+                        with st.expander("📖 Kode Asli"):
+                            st.code(current_segment, language=code_type)
+                
+                with col3:
+                    if st.button("🔄 Ulang Hafalan", use_container_width=True):
+                        st.session_state.hafalan_timer_start = time.time()
+                        st.session_state.show_hafalan_results = False
+                        st.rerun()
+                
+                # Tampilkan hasil hafalan
+                if 'show_hafalan_results' in st.session_state and st.session_state.show_hafalan_results:
+                    st.markdown("---")
+                    st.markdown("## 📊 HASIL HAFALAN")
+                    
+                    similarity = st.session_state.last_hafalan_similarity
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Kemiripan", f"{similarity}%")
+                    with col2:
+                        if similarity >= 90:
+                            grade = "SEMPURNA 🎉"
+                            color = "success"
+                        elif similarity >= 80:
+                            grade = "BAIK 👍"
+                            color = "info"
+                        elif similarity >= 70:
+                            grade = "CUKUP 💪"
+                            color = "warning"
+                        else:
+                            grade = "ULANGI 🔄"
+                            color = "error"
+                        st.metric("Status", grade)
+                    with col3:
+                        # Tombol bandingkan
+                        if st.button("🔍 Bandingkan", use_container_width=True):
+                            st.session_state.show_comparison = True
+                            st.rerun()
+                    
+                    # Progress bar visual
+                    progress_html = f"""
+                    <div style="background-color: #f0f0f0; border-radius: 10px; padding: 3px; margin: 10px 0;">
+                        <div style="background-color: {'#4CAF50' if similarity >= 90 else '#2196F3' if similarity >= 80 else '#FF9800' if similarity >= 70 else '#F44336'}; 
+                                    width: {similarity}%; 
+                                    height: 20px; 
+                                    border-radius: 8px;">
+                        </div>
+                    </div>
+                    """
+                    st.markdown(progress_html, unsafe_allow_html=True)
+                    
+                    # Tampilkan evaluasi
+                    if similarity >= 80:
+                        st.success(f"🎉 **Bagus sekali!** Kamu sudah menghafal {similarity}% dengan benar!")
+                    elif similarity >= 60:
+                        st.info(f"👍 **Sudah cukup baik.** {similarity}% benar. Tingkatkan lagi!")
+                    else:
+                        st.warning(f"📚 **Perlu lebih fokus.** Hanya {similarity}% benar. Coba hafalkan lagi.")
+                    
+                    # Tampilkan kesalahan jika ada
+                    if st.session_state.last_hafalan_errors:
+                        st.markdown("#### ❌ Kesalahan Fatal:")
+                        for error in st.session_state.last_hafalan_errors:
+                            st.error(error)
+                    
+                    if st.session_state.last_hafalan_warnings:
+                        st.markdown("#### ⚠️ Peringatan:")
+                        for warning in st.session_state.last_hafalan_warnings:
+                            st.warning(warning)
+                    
+                    if st.session_state.last_hafalan_suggestions:
+                        st.markdown("#### 💡 Saran:")
+                        for suggestion in st.session_state.last_hafalan_suggestions:
+                            st.info(suggestion)
+                    
+                    # Action buttons setelah hasil
+                    st.markdown("---")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        if similarity >= 70:  # Threshold untuk lanjut
+                            if current_index < total_segments - 1:
+                                if st.button("➡️ Lanjut Bagian Berikutnya", type="primary", use_container_width=True):
+                                    # Simpan progress
+                                    key = f"{selected_topic}_{current_index}" if st.session_state.hafalan_source != "custom" else f"custom_{current_index}"
+                                    if key not in st.session_state.memorized_parts:
+                                        st.session_state.memorized_parts[key] = []
+                                    st.session_state.memorized_parts[key].append(similarity)
+                                    
+                                    # Pindah ke segment berikutnya
+                                    st.session_state.current_segment_index += 1
+                                    st.session_state.hafalan_start_time = time.time()
+                                    st.session_state.show_hafalan_editor = False
+                                    st.session_state.show_hafalan_results = False
+                                    st.session_state.hafalan_timer_start = time.time()
+                                    st.rerun()
+                            else:
+                                if st.button("✅ Selesai Hafalan", type="primary", use_container_width=True):
+                                    # Simpan progress terakhir
+                                    key = f"{selected_topic}_{current_index}" if st.session_state.hafalan_source != "custom" else f"custom_{current_index}"
+                                    if key not in st.session_state.memorized_parts:
+                                        st.session_state.memorized_parts[key] = []
+                                    st.session_state.memorized_parts[key].append(similarity)
+                                    
+                                    st.success("🎉 **SELESAI!** Semua bagian telah dihafal!")
+                                    time.sleep(2)
+                                    st.session_state.hafalan_mode = False
+                                    st.session_state.hafalan_source_selected = False
+                                    st.rerun()
+                        else:
+                            if st.button("🔄 Ulangi Bagian Ini", use_container_width=True):
+                                st.session_state.hafalan_start_time = time.time()
+                                st.session_state.show_hafalan_editor = False
+                                st.session_state.show_hafalan_results = False
+                                st.session_state.hafalan_timer_start = time.time()
+                                st.rerun()
+                    
+                    with col2:
+                        if st.button("🔍 Lihat Perbandingan", use_container_width=True):
+                            st.session_state.show_comparison = True
+                            st.rerun()
+                    
+                    with col3:
+                        if st.button("🚪 Keluar Mode Hafalan", use_container_width=True):
+                            st.session_state.hafalan_mode = False
+                            st.session_state.hafalan_source_selected = False
+                            st.session_state.show_hafalan_editor = False
+                            st.session_state.show_hafalan_results = False
+                            st.rerun()
+                    
+                    # Tampilkan perbandingan jika diminta
+                    if 'show_comparison' in st.session_state and st.session_state.show_comparison:
+                        st.markdown("---")
+                        st.markdown("### 🔍 Perbandingan Kode")
+                        
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.markdown("**Kode Kamu:**")
+                            st.code(st.session_state.last_user_code, language=code_type)
+                        with col_b:
+                            st.markdown("**Kode Asli:**")
+                            st.code(current_segment, language=code_type)
+            
+            # Navigation untuk pindah segment (jika lebih dari 1)
+            if total_segments > 1:
+                st.markdown("---")
+                st.markdown("#### 🔄 Navigasi Antar Bagian:")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    if current_index > 0:
+                        if st.button("⬅️ Sebelumnya", use_container_width=True):
+                            st.session_state.current_segment_index -= 1
+                            st.session_state.hafalan_start_time = time.time()
+                            st.session_state.show_hafalan_editor = False
+                            st.session_state.show_hafalan_results = False
+                            st.rerun()
+                
+                with col2:
+                    if st.button("🔁 Acak", use_container_width=True):
+                        new_index = random.randint(0, total_segments - 1)
+                        st.session_state.current_segment_index = new_index
+                        st.session_state.hafalan_start_time = time.time()
+                        st.session_state.show_hafalan_editor = False
+                        st.session_state.show_hafalan_results = False
+                        st.rerun()
+                
+                with col3:
+                    if st.button("📊 Lihat Semua", use_container_width=True):
+                        st.session_state.show_all_segments = True
+                        st.rerun()
+                
+                with col4:
+                    if st.button("🔄 Reset Progress", type="secondary", use_container_width=True):
+                        st.session_state.current_segment_index = 0
+                        st.session_state.hafalan_start_time = time.time()
+                        st.session_state.show_hafalan_editor = False
+                        st.session_state.show_hafalan_results = False
+                        st.session_state.memorized_parts = {}
+                        st.rerun()
+                
+                # Tampilkan semua segment jika diminta
+                if 'show_all_segments' in st.session_state and st.session_state.show_all_segments:
+                    st.markdown("---")
+                    st.markdown("### 📚 Semua Bagian:")
+                    
+                    for i, segment in enumerate(segments):
+                        with st.expander(f"Bagian {i+1} {'✅' if f'{selected_topic}_{i}' in st.session_state.memorized_parts else '⏳'}", 
+                                      expanded=i==current_index):
+                            st.code(segment, language=code_type)
+                            
+                            if st.button(f"Pilih Bagian {i+1}", key=f"select_{i}"):
+                                st.session_state.current_segment_index = i
+                                st.session_state.hafalan_start_time = time.time()
+                                st.session_state.show_hafalan_editor = False
+                                st.session_state.show_hafalan_results = False
+                                st.session_state.show_all_segments = False
+                                st.rerun()
 
 # =========================
-# SIMULASI MODE
+# SIMULASI MODE (TETAP SAMA - TIDAK DIUBAH)
 # =========================
 elif selected_mode == "🎯 Simulasi":
     st.title("🎯 Mode Simulasi USK")
@@ -1679,21 +2097,26 @@ elif selected_mode == "🎯 Simulasi":
                 st.rerun()
 
 # =========================
-# PROGRESS MODE
+# PROGRESS MODE (DIPERBAIKI)
 # =========================
 elif selected_mode == "📊 Progress":
     st.title("📊 Progress Belajar")
     
-    if not st.session_state.practice_scores and not st.session_state.quiz_scores:
+    if not st.session_state.practice_scores and not st.session_state.quiz_scores and not st.session_state.memorized_parts and not st.session_state.user_custom_codes:
         st.info("📭 Belum ada data progress. Mulai latihan atau simulasi terlebih dahulu!")
         
         # Quick start buttons
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             if st.button("✏️ Mulai Latihan", type="primary", use_container_width=True):
                 st.session_state.current_mode = "✏️ Praktek"
                 st.rerun()
         with col2:
+            if st.button("🧠 Buat Hafalan", use_container_width=True):
+                st.session_state.current_mode = "✏️ Praktek"
+                st.session_state.hafalan_mode = True
+                st.rerun()
+        with col3:
             if st.button("🎯 Coba Simulasi", use_container_width=True):
                 st.session_state.current_mode = "🎯 Simulasi"
                 st.rerun()
@@ -1712,54 +2135,126 @@ elif selected_mode == "📊 Progress":
             st.metric("Total Simulasi", total_simulations)
         
         with col3:
-            if st.session_state.practice_scores:
-                all_scores = []
-                for scores in st.session_state.practice_scores.values():
-                    all_scores.extend(scores)
-                avg_practice = sum(all_scores) / len(all_scores)
-                st.metric("Rata2 Praktek", f"{avg_practice:.1f}%")
-            else:
-                st.metric("Rata2 Praktek", "0%")
+            total_memorized = len(st.session_state.memorized_parts)
+            st.metric("Bagian Dihafal", total_memorized)
         
         with col4:
-            if st.session_state.quiz_scores:
-                avg_simulation = sum(s['score'] for s in st.session_state.quiz_scores) / len(st.session_state.quiz_scores)
-                st.metric("Rata2 Simulasi", f"{avg_simulation:.1f}%")
-            else:
-                st.metric("Rata2 Simulasi", "0%")
+            total_custom = sum(len(codes) for codes in st.session_state.user_custom_codes.values())
+            st.metric("Kode Custom", total_custom)
+        
+        # Progress Custom Codes
+        if st.session_state.user_custom_codes:
+            st.markdown("---")
+            st.markdown("### 📝 Kode Custom Kamu")
+            
+            for category, codes in st.session_state.user_custom_codes.items():
+                with st.expander(f"{category} ({len(codes)} kode)", expanded=False):
+                    for i, code in enumerate(codes):
+                        st.markdown(f"**Kode {i+1}:**")
+                        st.code(code[:300] + "..." if len(code) > 300 else code, language="text")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button(f"🧠 Hafalkan {i+1}", key=f"memorize_custom_{category}_{i}"):
+                                st.session_state.custom_code_to_memorize = code
+                                st.session_state.hafalan_mode = True
+                                st.session_state.current_mode = "✏️ Praktek"
+                                st.session_state.hafalan_source = "custom"
+                                st.session_state.hafalan_source_selected = True
+                                st.rerun()
+                        with col2:
+                            if st.button(f"🗑️ Hapus {i+1}", key=f"delete_custom_{category}_{i}"):
+                                st.session_state.user_custom_codes[category].pop(i)
+                                if not st.session_state.user_custom_codes[category]:
+                                    del st.session_state.user_custom_codes[category]
+                                st.rerun()
+        
+        # Progress hafalan
+        if st.session_state.memorized_parts:
+            st.markdown("---")
+            st.markdown("### 🧠 Progress Hafalan")
+            
+            # Kelompokkan berdasarkan materi
+            material_groups = {}
+            for key, scores in st.session_state.memorized_parts.items():
+                if "_" in key:
+                    material_name = key.split("_")[0]
+                    if material_name not in material_groups:
+                        material_groups[material_name] = []
+                    material_groups[material_name].extend(scores)
+                else:
+                    if "Custom" not in material_groups:
+                        material_groups["Custom"] = []
+                    material_groups["Custom"].extend(scores)
+            
+            for material, scores in material_groups.items():
+                with st.expander(f"{material} ({len(scores)} bagian)", expanded=False):
+                    if scores:
+                        avg_score = sum(scores) / len(scores)
+                        best_score = max(scores)
+                        last_score = scores[-1]
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Rata-rata", f"{avg_score:.1f}%")
+                        with col2:
+                            st.metric("Terbaik", f"{best_score:.1f}%")
+                        with col3:
+                            st.metric("Terakhir", f"{last_score:.1f}%")
+                    
+                    # Button untuk lanjut hafalan
+                    if material != "Custom":
+                        if st.button(f"🧠 Lanjut Hafalan {material}", key=f"continue_{material}", use_container_width=True):
+                            st.session_state.current_mode = "✏️ Praktek"
+                            st.session_state.hafalan_mode = True
+                            st.session_state.hafalan_source = "auto_material"
+                            st.session_state.hafalan_source_selected = True
+                            st.rerun()
         
         # Practice progress per topic
-        st.markdown("---")
-        st.markdown("### 📊 Progress per Materi")
-        
-        for topic, scores in st.session_state.practice_scores.items():
-            with st.expander(f"{topic} ({len(scores)}x praktek)", expanded=False):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    avg_score = sum(scores) / len(scores)
-                    st.metric("Rata-rata", f"{avg_score:.1f}%")
-                with col2:
-                    best_score = max(scores)
-                    st.metric("Terbaik", f"{best_score:.1f}%")
-                with col3:
-                    last_score = scores[-1]
-                    st.metric("Terakhir", f"{last_score:.1f}%")
-                
-                # Improvement
-                if len(scores) > 1:
-                    improvement = scores[-1] - scores[0]
-                    if improvement > 0:
-                        st.success(f"📈 Peningkatan: +{improvement:.1f}%")
-                    elif improvement < 0:
-                        st.warning(f"📉 Penurunan: {improvement:.1f}%")
-                    else:
-                        st.info("➡️ Stabil")
-                
-                # Quick action
-                if st.button(f"✏️ Latihan {topic}", key=f"practice_{topic}", use_container_width=True):
-                    st.session_state.current_mode = "✏️ Praktek"
-                    st.session_state.selected_topic = topic
-                    st.rerun()
+        if st.session_state.practice_scores:
+            st.markdown("---")
+            st.markdown("### 📊 Progress per Materi")
+            
+            for topic, scores in st.session_state.practice_scores.items():
+                with st.expander(f"{topic} ({len(scores)}x praktek)", expanded=False):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        avg_score = sum(scores) / len(scores)
+                        st.metric("Rata-rata", f"{avg_score:.1f}%")
+                    with col2:
+                        best_score = max(scores)
+                        st.metric("Terbaik", f"{best_score:.1f}%")
+                    with col3:
+                        last_score = scores[-1]
+                        st.metric("Terakhir", f"{last_score:.1f}%")
+                    
+                    # Improvement
+                    if len(scores) > 1:
+                        improvement = scores[-1] - scores[0]
+                        if improvement > 0:
+                            st.success(f"📈 Peningkatan: +{improvement:.1f}%")
+                        elif improvement < 0:
+                            st.warning(f"📉 Penurunan: {improvement:.1f}%")
+                        else:
+                            st.info("➡️ Stabil")
+                    
+                    # Quick actions
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button(f"✏️ Latihan {topic}", key=f"practice_{topic}", use_container_width=True):
+                            st.session_state.current_mode = "✏️ Praktek"
+                            st.session_state.hafalan_mode = False
+                            st.session_state.selected_topic = topic
+                            st.rerun()
+                    with col2:
+                        if st.button(f"🧠 Hafalan {topic}", key=f"memorize_{topic}", use_container_width=True):
+                            st.session_state.current_mode = "✏️ Praktek"
+                            st.session_state.hafalan_mode = True
+                            st.session_state.hafalan_source = "auto_material"
+                            st.session_state.hafalan_source_selected = True
+                            st.session_state.selected_topic = topic
+                            st.rerun()
         
         # Simulation history
         if st.session_state.quiz_scores:
@@ -1776,47 +2271,33 @@ elif selected_mode == "📊 Progress":
                     with col3:
                         st.metric("Soal", sim['questions'])
         
-        # Recommendations
-        st.markdown("---")
-        st.markdown("### 🎯 Rekomendasi Latihan")
-        
-        if st.session_state.practice_scores:
-            # Find weakest topic
-            topic_avgs = {}
-            for topic, scores in st.session_state.practice_scores.items():
-                topic_avgs[topic] = sum(scores) / len(scores)
-            
-            if topic_avgs:
-                weakest = min(topic_avgs.items(), key=lambda x: x[1])
-                strongest = max(topic_avgs.items(), key=lambda x: x[1])
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.error(f"**Perlu latihan lebih:**")
-                    st.markdown(f"**{weakest[0]}** ({weakest[1]:.1f}%)")
-                    if st.button(f"✏️ Fokus pada {weakest[0]}", key=f"focus_{weakest[0]}", use_container_width=True):
-                        st.session_state.current_mode = "✏️ Praktek"
-                        st.session_state.selected_topic = weakest[0]
-                        st.rerun()
-                
-                with col2:
-                    st.success(f"**Sudah dikuasai:**")
-                    st.markdown(f"**{strongest[0]}** ({strongest[1]:.1f}%)")
-                    if st.button(f"🎯 Challenge {strongest[0]}", key=f"challenge_{strongest[0]}", use_container_width=True):
-                        st.session_state.current_mode = "🎯 Simulasi"
-                        st.rerun()
-        
         # Reset button
         st.markdown("---")
-        if st.button("🔄 Reset Semua Progress", type="secondary"):
-            st.session_state.practice_scores = {}
-            st.session_state.quiz_scores = []
-            st.session_state.last_viewed = []
-            st.success("Semua progress telah direset!")
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Reset Semua Progress", type="secondary", use_container_width=True):
+                st.session_state.practice_scores = {}
+                st.session_state.quiz_scores = []
+                st.session_state.last_viewed = []
+                st.session_state.memorized_parts = {}
+                st.session_state.user_custom_codes = {}
+                st.success("Semua progress telah direset!")
+                st.rerun()
+        with col2:
+            if st.button("💾 Export Progress", use_container_width=True):
+                # Create summary
+                summary = {
+                    "total_practice": sum(len(scores) for scores in st.session_state.practice_scores.values()),
+                    "total_simulations": len(st.session_state.quiz_scores),
+                    "total_memorized_parts": len(st.session_state.memorized_parts),
+                    "total_custom_codes": sum(len(codes) for codes in st.session_state.user_custom_codes.values()),
+                    "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                st.json(summary)
+                st.success("Progress berhasil diexport!")
 
 # =========================
-# QUIZ MODE
+# QUIZ MODE (TETAP SAMA)
 # =========================
 elif selected_mode == "❓ Quiz":
     st.title("❓ Quick Quiz - Test Pemahaman")
@@ -2068,8 +2549,8 @@ elif selected_mode == "❓ Quiz":
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p>📚 <b>PerpusCode USK - All-in-One Learning Platform</b> | Versi 2.0</p>
-    <p>📖 Learn • ✍️ Practice • 🎯 Simulate • 📊 Track • ❓ Quiz</p>
-    <p>💪 Persiapkan USK dengan optimal! Target skor minimal: 80%</p>
+    <p>📚 <b>PerpusCode USK - All-in-One Learning Platform</b> | Versi 2.2</p>
+    <p>📖 Learn • ✍️ Practice • 🧠 Memorize Custom • 🎯 Simulate • 📊 Track • ❓ Quiz</p>
+    <p>💪 <b>Fitur Baru:</b> Input kode custom untuk dihafal sesuai kebutuhan!</p>
 </div>
 """, unsafe_allow_html=True)
